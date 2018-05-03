@@ -99,3 +99,10 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+#data
+train-*-of-*
+validation-*-of-*
+.tfrecords
+
+

@@ -1,0 +1,18 @@
+# use namedict for easy access members
+
+--- !NameDict
+
+data_path: /home/tanguofu/workspace/AutoDL/test_dataset/cifar10
+train_nums: 5000
+#
+class_num: 10
+batch_size: 2
+minibatch: 2
+
+epoch: 10
+
+#
+checkpoint_dir: checkpoint
+
+
+
