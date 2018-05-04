@@ -129,7 +129,6 @@ def cifar10_dataset(path, batch_size, repeat=-1):
         ds = ds.apply(
             tf.contrib.data.shuffle_and_repeat(batch_size * 2, repeat))
 
-        ds = ds.take()
         ds = ds.apply(
             tf.contrib.data.map_and_batch(
                 map_func=map_fun,

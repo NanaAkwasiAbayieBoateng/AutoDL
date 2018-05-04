@@ -56,7 +56,7 @@ def main(argv):
     param = update_param(pipe) 
 
     # 2. selet a model, dataset, lr, opt, and so on,  as these can be enumeration.
-    create_model_func = official_model.ResnetModel(param.resnet_layer, param.class_num)
+    create_model_func = official_model.Cifar10Model(param.resnet_layer, param.class_num)
 
     train_set, vaild_set, eval__set = cifar10_dataset(param.data_path, param.batch_size, param.epoch)
 

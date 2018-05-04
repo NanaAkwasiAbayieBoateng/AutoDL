@@ -8,12 +8,12 @@ import tensorflow as tf
 def PiecewiseLR(params, global_step=None):
     # empirical from Master, 
     boundary_epochs = params.boundaries
-    decay_rates = params.boundaries
+    decay_rates = params.decay_rates
     
 
-    initial_learning_rate = params.initial_learning_rate * param.minibatch / params.batch_denom
+    initial_learning_rate = params.initial_learning_rate * params.minibatch / params.batch_denom
 
-    batches_per_epoch = params.train_nums / param.minibatch
+    batches_per_epoch = params.train_nums / params.minibatch
 
     boundaries = [int(batches_per_epoch * epoch) for epoch in boundary_epochs]
     vals = [initial_learning_rate * decay for decay in decay_rates]

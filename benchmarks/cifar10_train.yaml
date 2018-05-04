@@ -8,7 +8,7 @@ validation: 10000
 class_num: 10
 
 # train 
-minibatch: 2
+minibatch: 3
 epoch: 250
 checkpoint_dir: checkpoint
 
@@ -32,5 +32,5 @@ decay_rates:
   - 0.001
 
 # loss & opt
-weight_decay: 2e-4
+weight_decay: 0.0002
 momentum: 0.9
