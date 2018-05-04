@@ -179,14 +179,19 @@ class Pipeline:
             # TODO: for large dataset remove BN var from l2 loss
             tower_trainvars = self.vgr.get_trainable_variable(i)
 
-            print('tower_trainvars:')
-            print('\n'.join([n.name for n in tower_trainvars]))
+            #print('tower_trainvars:')
+            #print('\n'.join([n.name for n in tower_trainvars]))
             
             with tf.device(predict.device):
-                loss  = compute_func(labels, predict)
+                loss  = compute_func(labels=labels, logits=predict)
+
+                #for replicated mode every tower has same l2 loss, 
+                # so this can shared
+
                 l2loss = [tf.nn.l2_loss(v) for v in tower_trainvars]
                 l2loss = weight_decay * tf.add_n(l2loss)
                 total_loss = loss + l2loss
+                
                 self.hook.add_logtensor('loss_0', loss)
                 self.hook.add_logtensor('l2loss', l2loss)
                 self.hook.add_logtensor('total_loss', total_loss)
