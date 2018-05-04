@@ -431,11 +431,13 @@ class Model(object):
       A logits Tensor with shape [<batch_size>, self.num_classes].
     """
 
+    ''' default is channels_first
     if self.data_format == 'channels_first':
       # Convert the inputs from channels_last (NHWC) to channels_first (NCHW).
       # This provides a large performance boost on GPU. See
       # https://www.tensorflow.org/performance/performance_guide#data_formats
       inputs = tf.transpose(inputs, [0, 3, 1, 2])
+    '''
 
     inputs = conv2d_fixed_padding(
         inputs=inputs, filters=self.num_filters, kernel_size=self.kernel_size,

@@ -82,7 +82,7 @@ def cifar10_dataset(path, batch_size, repeat=-1):
         return image, label
 
     def augment(image):
-        # Reshape to HWC for augment
+        # Reshape to CHW -> HWC for augment
         image = tf.cast(
             tf.transpose(tf.reshape(image, [3, 32, 32]), [1, 2, 0]),
             tf.float32)
@@ -93,14 +93,18 @@ def cifar10_dataset(path, batch_size, repeat=-1):
 
         image = tf.image.random_flip_left_right(image)
 
-        "32,32,3  -> 3,32,32"
-        image = tf.transpose(image, [2, 1, 0])
+        "32,32,3  -> 3,32,32 HWC -> CHW" 
+        image = tf.transpose(image, [2, 0, 1])
+  
         #Todo show image
         return image
 
     def nomarlize(image):
         image = tf.cast(image, tf.float32)
         image = image / 127.5 - 1.0
+
+        #image = tf.image.per_image_standardization(image)
+
         return image
 
     def load_tfrecords(filenames, batch_size, repeat=-1, istrain=True):
@@ -121,8 +125,11 @@ def cifar10_dataset(path, batch_size, repeat=-1):
                 lambda filename: tf.data.TFRecordDataset(filename),
                 cycle_length=len(filenames)))
         ds = ds.prefetch(batch_size * 2)
+
         ds = ds.apply(
             tf.contrib.data.shuffle_and_repeat(batch_size * 2, repeat))
+
+        ds = ds.take()
         ds = ds.apply(
             tf.contrib.data.map_and_batch(
                 map_func=map_fun,

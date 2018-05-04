@@ -5,25 +5,24 @@ import tensorflow as tf
   Get a learning rate that decays step-wise as training progresses.
 """
 
-def PiecewiseLR(train_samples_num, minibatch_size, initial_learning_rate=0.1, global_step=None):
+def PiecewiseLR(params, global_step=None):
     # empirical from Master, 
-    boundary_epochs = [30, 60, 80, 90]
-    decay_rates = [1, 0.1, 0.01, 0.001, 0.0001]
+    boundary_epochs = params.boundaries
+    decay_rates = params.boundaries
     
-    initial_learning_rate = initial_learning_rate * minibatch_size / 256
 
-    one_epoch_step = int(train_samples_num / minibatch_size)
+    initial_learning_rate = params.initial_learning_rate * param.minibatch / params.batch_denom
 
-    step_boundaries = [one_epoch_step*epoch for epoch in boundary_epochs]
+    batches_per_epoch = params.train_nums / param.minibatch
 
-    vals = [initial_learning_rate * lr for lr in decay_rates]
+    boundaries = [int(batches_per_epoch * epoch) for epoch in boundary_epochs]
+    vals = [initial_learning_rate * decay for decay in decay_rates]
     
     if not global_step:
         global_step = tf.train.get_or_create_global_step()
-    
-    global_step = tf.cast(global_step, tf.int32)    
-    tf.logging.info("PiecewiseLR, step_boundaries:%s, value:%s" %  (step_boundaries, vals))
-    return tf.train.piecewise_constant(global_step, step_boundaries, vals)
+        global_step = tf.cast(global_step, tf.int32)
+    tf.logging.info("Set PiecewiseLR, step_boundaries:%s, value:%s" %  (boundaries, vals))
+    return tf.train.piecewise_constant(global_step, boundaries, vals)
 
 def test_PiecewiseLR():
     global_step = tf.train.get_or_create_global_step()
