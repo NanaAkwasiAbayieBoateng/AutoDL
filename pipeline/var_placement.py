@@ -25,7 +25,7 @@ class ReplicatePlacement:
     def get_create_scope(self, deviceid):
         
         # because will placement from 0 to N
-        var_scope = tf.variable_scope('gpu_%s' % deviceid, reuse=deviceid != 0)
+        var_scope = tf.variable_scope('gpu_%s' % deviceid, reuse=False)
         op_scope = tf.name_scope('tower_%s' % deviceid)
         device_scope = tf.device(self.worker_devices[deviceid])
         return var_scope, op_scope, device_scope

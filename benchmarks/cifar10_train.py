@@ -40,8 +40,9 @@ def load_param(pipe):
         param = yaml.load(f)
 
     #print("Train cifar10 with param:%s " % repr(param))
-    param['all_step'] = int(param.epoch * param.train_nums / param.minibatch)
-    param['batch_size'] = int(param.minibatch / pipe.gpu_nums)
+    param['all_step'] = max(int(param.epoch * param.train_nums / param.minibatch), 10)
+    param['batch_size'] = max(int(param.minibatch / pipe.gpu_nums), 1)
+    param['minibatch'] = param['batch_size']*pipe.gpu_nums
 
     tf.logging.info("Param:" + repr(param))
     return param

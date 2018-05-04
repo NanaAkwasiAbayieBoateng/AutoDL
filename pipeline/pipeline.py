@@ -72,6 +72,10 @@ def reduce_by_copy(tensors_across_devices, use_mean=True):
     """
     if type(tensors_across_devices) != list:
          tensors_across_devices = list(tensors_across_devices)
+    
+    if len(tensors_across_devices) == 1:
+        return tensors_across_devices[0]
+
     reduced_tensor = tf.add_n(tensors_across_devices)
     if use_mean:
         reduced_tensor *= 1.0 / len(tensors_across_devices)
@@ -89,7 +93,10 @@ def reduce_by_nccl(tensors_across_devices, use_mean=True):
     """
     if type(tensors_across_devices) != list:
          tensors_across_devices = list(tensors_across_devices)
-         
+    
+    if len(tensors_across_devices) == 1:
+        return tensors_across_devices[0]
+
     reduced_tensor = nccl.reduce_sum(tensors_across_devices)
     if use_mean:
         reduced_tensor *= 1.0 / len(tensors_across_devices)
@@ -171,6 +178,9 @@ class Pipeline:
             
             # TODO: for large dataset remove BN var from l2 loss
             tower_trainvars = self.vgr.get_trainable_variable(i)
+
+            print('tower_trainvars:')
+            print('\n'.join([n.name for n in tower_trainvars]))
             
             with tf.device(predict.device):
                 loss  = compute_func(labels, predict)
@@ -214,9 +224,13 @@ class Pipeline:
         #compute and group by var name, we ingore the first tower name
         for i, loss in device_losses.items():
             with tf.device(self.gpu_devices[i]):
+                
+                assert 'GPU:%s'%i in loss.device
                 tower_trainvars = self.vgr.get_trainable_variable(i)
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
+            print('tower_grad:')
+            print('\n'.join([g.name+":"+v.name for g,v in tower_grad]))
             for grad, v in tower_grad:
                 # for replicated ingore tower name 
                 v_mode_name = '/'.join(v.name.split('/')[1:])
@@ -229,7 +243,7 @@ class Pipeline:
         device_grad = {}
         for vname, grads in grad_map.items():
             with tf.device(v.device):
-                avg_grad = self.reduce(grads) if len(grads) > 1 else grads[0]
+                avg_grad = self.reduce(grads)
                 
             for v in var_map[vname]:
                 deviceid = pydev.DeviceSpec.from_string(v.device).device_index
