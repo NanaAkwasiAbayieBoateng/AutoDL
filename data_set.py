@@ -19,7 +19,7 @@ def synthetic_dataset(shape, classnum):
       dataset: tf.data.Dataset instance
     """
     batch_size, channel, height, width = shape
-    
+
     images = tf.truncated_normal(
         [batch_size, channel, height, width],
         mean=127,
@@ -34,7 +34,7 @@ def synthetic_dataset(shape, classnum):
         dtype=tf.int32,
         name='synthetic_labels')
 
-   
+
 
     def parser(image, label):
         #image = tf.cast(image, tf.float32)
@@ -62,7 +62,7 @@ def cifar10_dataset(path, batch_size, repeat=-1):
       classnum: int, must be ranage[0, INT_MAX)
 
     Return :
-      train_set, vaild_set, eval__set: 
+      train_set, vaild_set, eval__set:
     """
 
     def parser(serialized_example):
@@ -93,9 +93,9 @@ def cifar10_dataset(path, batch_size, repeat=-1):
 
         image = tf.image.random_flip_left_right(image)
 
-        "32,32,3  -> 3,32,32 HWC -> CHW" 
+        "32,32,3  -> 3,32,32 HWC -> CHW"
         image = tf.transpose(image, [2, 0, 1])
-  
+
         #Todo show image
         return image
 
@@ -156,12 +156,12 @@ def imagenet_dataset(path, batch_size, repeat=-1):
       classnum: int, must be ranage[0, INT_MAX)
 
     Return :
-      train_set, vaild_set: 
+      train_set, vaild_set:
     """
 
     def parser(serialized_example):
         """cpoy for tensorflow benchmarks.
-    
+
         image/height: 462
         image/width: 581
         image/colorspace: 'RGB'
@@ -177,7 +177,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
         image/format: 'JPEG'
         image/filename: 'ILSVRC2012_val_00041207.JPEG'
         image/encoded: <JPEG encoded string>
-    
+
         """
         features = tf.parse_single_example(
             serialized_example,
@@ -195,7 +195,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
                 'image/object/bbox/ymax':
                 tf.VarLenFeature(dtype=tf.float32)
             })
- 
+
         label = tf.cast(features['image/class/label'], tf.int32)
         image = features['image/encoded']
 
@@ -216,34 +216,32 @@ def imagenet_dataset(path, batch_size, repeat=-1):
         return image, label, bbox
 
     def augment(image, bbox):
-        image = imagenet_preprocessing.preprocess_image(image, bbox, 224, 224, 3, True)    
+        image = imagenet_preprocessing.preprocess_image(image, bbox, 224, 224, 3, True)
         return image
 
 
     def load_tfrecords(pattern, batch_size, repeat=-1, istrain=True):
 
-        num_parallel_batches = max(batch_size >> 2, 1)
+        num_parallel_batches = max(batch_size >> 2, 10)
 
         def map_fun(x):
             image, label, bbox = parser(x)
             image = augment(image, bbox)
             """ image has shape [224, 224, 3] need to transpose"""
-            print(image)
-            
+
             image = tf.transpose(image, [2, 0, 1])
-            print(image.shape)
             return (image, label)
 
         ds = tf.data.Dataset.list_files(pattern)
         ds = ds.apply(
             tf.contrib.data.parallel_interleave(
                 lambda filename: tf.data.TFRecordDataset(filename),
-                cycle_length=2))
-        ds = ds.prefetch(batch_size * 2)
-        #ds = ds.apply(
-        #    tf.contrib.data.shuffle_and_repeat(batch_size * 2, repeat))
+                cycle_length=20))
+        ds = ds.prefetch(batch_size * 20)
         ds = ds.apply(
-            tf.contrib.data.map_and_batch(
+              tf.contrib.data.shuffle_and_repeat(batch_size * 100, repeat))
+        ds = ds.apply(
+              tf.contrib.data.map_and_batch(
                 map_func=map_fun,
                 batch_size=batch_size,
                 num_parallel_batches=num_parallel_batches))
@@ -257,8 +255,8 @@ def imagenet_dataset(path, batch_size, repeat=-1):
 
 
 if __name__ == '__main__':
-    
-    
+
+
     ds = synthetic_dataset([4, 1, 1, 1], classnum = 10)
     iterator = ds.make_initializable_iterator()
     image, label = iterator.get_next()
@@ -289,4 +287,4 @@ if __name__ == '__main__':
         print('Test imagenet')
         v1, v2 = sess.run([image, label])
     '''
- 
+
