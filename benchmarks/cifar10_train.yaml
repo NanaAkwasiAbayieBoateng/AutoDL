@@ -8,12 +8,12 @@ validation: 10000
 class_num: 10
 
 # train 
-minibatch: 128
+minibatch: 2048
 epoch: 250
 checkpoint_dir: checkpoint
 
 #model
-resnet_layer: 32
+resnet_layer: 50
 
 # init_lr: initial_learning_rate*minibatch/batch_denom
 initial_learning_rate: 0.1
