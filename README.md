@@ -1,5 +1,22 @@
-### AutoML
-- A tf train framework for easy and as much as GPU use ratio.
+### AutoML(0.1)
+- A tf train framework for auto train the nice mode.
+- This project now is developing, now as code showing
+
+### Feature
+- sample API & module: keep sample & keep easy to replace.
+- multi GPU support: 
+  - replcated for P2P with GPU such as NVLINK
+  - BlacePlament for low latency and limit bandwith such as PCI-E*16 
+
+
+### **TODO**:
+  1. **distribute support**: horovd(MPI) and broadcast_proxy.
+     - horovd (MPI & Roce)
+     - broadcast_proxy： seastear, DPDK
+  2. **Auto hyterparam select**: detect the cpu, gpu, network limits, as much use evey resource
+
+  3. **Model zoo & Data zoo**: shared state of art some models.
+
 
 ### grad variable sync strategy
 - multi machine
