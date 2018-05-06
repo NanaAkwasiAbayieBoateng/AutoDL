@@ -2,13 +2,13 @@
 
 --- !NameDict
 # data set 
-data_path: /root/AutoDL/test_dataset/cifar10
+data_path: ./test_dataset/cifar10
 train_nums: 50000
 validation: 10000
 class_num: 10
 
 # train 
-minibatch: 3
+minibatch: 128
 epoch: 250
 checkpoint_dir: checkpoint
 

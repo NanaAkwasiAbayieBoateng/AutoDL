@@ -25,10 +25,14 @@ from model         import official_model
 from learning_rate import PiecewiseLR
 from pipeline      import pipeline
 
+import train_hook
+
 '''
 usage: 
    cifar10_train.py [cifar10_train.yaml]
-   
+
+TODO: 
+ - save checkpiont by params
 '''
 
 
@@ -76,11 +80,12 @@ def main(argv):
         return tf.reduce_mean(loss)
     device_losses, sum_loss = pipe.setup_loss(device_labels, device_predicts, compute_loss_func, param.weight_decay)
     
+    # 
     def accuracy(labels, predicts, topk):
         return tf.reduce_sum(tf.cast(tf.nn.in_top_k(predicts, labels, topk), tf.float32))
 
-    top1 = pipe.setup_reducesum(device_labels, device_predicts, lambda x,y:accuracy(x,y, 1))
-    top5 = pipe.setup_reducesum(device_labels, device_predicts, lambda x,y:accuracy(x,y, 5))
+    top1 = pipe.setup_reduce(device_labels, device_predicts, lambda x,y:accuracy(x,y, 1), use_mean=True)
+    top5 = pipe.setup_reduce(device_labels, device_predicts, lambda x,y:accuracy(x,y, 5), use_mean=True)
 
     
     #3.3 set_up gradient compute and update
@@ -91,13 +96,10 @@ def main(argv):
     
     hooks = pipe.get_hook() + [
          tf.train.StopAtStepHook(last_step = param.all_step),
-         tf.train.LoggingTensorHook(tensors={'step': global_step,
-                                             'learning_rate:': lr,
-                                             'sum_loss': sum_loss,
-                                             'batch_top1': top1,
-                                             'batch_top5': top5,
-                                             },
-                                   every_n_iter=10),
+         train_hook.SaverHook(param.checkpoint_dir, save_every_n_steps=100),
+         train_hook.TrainStateHook(param, lr, sum_loss, 
+                                    {'batch_top1': top1, 'batch_top5': top5},
+                                   every_steps=100),
     ]
     
 
@@ -108,8 +110,7 @@ def main(argv):
 
     
     # start train loop 
-    with tf.train.MonitoredTrainingSession(checkpoint_dir=param.checkpoint_dir,
-                                           hooks=hooks,
+    with tf.train.MonitoredTrainingSession(hooks=hooks,
                                            config=config) as mon_sess:
         while not mon_sess.should_stop():
             mon_sess.run([train_op])

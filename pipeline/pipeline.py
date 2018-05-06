@@ -1,3 +1,4 @@
+
 import os
 import tensorflow as tf
 
@@ -11,8 +12,6 @@ from tensorflow.contrib import nccl
 
 from device_manager import gpu
 from pipeline import var_placement
-
-
 
 class PipelineHook(session_run_hook.SessionRunHook):
     '''
@@ -31,8 +30,10 @@ class PipelineHook(session_run_hook.SessionRunHook):
          The hook can modify the graph by adding new operations to it, 
          Second call of begin() on the same graph, should not change the graph.
         '''
-        self.global_step = tf.train.get_or_create_global_step()
-        self.run_ops += [self.global_step.assign_add(1)] 
+        self.global_step = tf.train.get_global_step()
+        self.run_ops += [self.global_step.assign_add(1)]
+
+
 
     def end(self, session):
         '''when session.run() raises OutOfRangeError or StopIteration.
@@ -108,7 +109,8 @@ class Pipeline:
     def __init__(self):
         self.gpu_nums = gpu.get_nr_gpu()
        
-        self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
+        #self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
+        self.vgr = var_placement.BalancePlacement(self.gpu_nums)
         self.reduce = reduce_by_copy
        
         self.gpu_devices = self.vgr.worker_devices
@@ -173,14 +175,12 @@ class Pipeline:
         for i, predict in device_predicts.items():
             
             labels = device_labels[i]
-            assert 'gpu_%s'%i in predict.name
+            assert 'GPU:%s'%i in predict.device
             assert labels.device == predict.device
             
             # TODO: for large dataset remove BN var from l2 loss
             tower_trainvars = self.vgr.get_trainable_variable(i)
 
-            #print('tower_trainvars:')
-            #print('\n'.join([n.name for n in tower_trainvars]))
             
             with tf.device(predict.device):
                 loss  = compute_func(labels=labels, logits=predict)
@@ -192,19 +192,15 @@ class Pipeline:
                 l2loss = weight_decay * tf.add_n(l2loss)
                 total_loss = loss + l2loss
                 
-                self.hook.add_logtensor('loss_0', loss)
-                self.hook.add_logtensor('l2loss', l2loss)
-                self.hook.add_logtensor('total_loss', total_loss)
             
             device_losses[i] = total_loss
         
         with tf.device(self.cpu_devices[0]):
             sum_loss = self.reduce(device_losses.values(), use_mean=False)
         
-        self.hook.add_logtensor('sum_loss', sum_loss)
         return device_losses, sum_loss
     
-    def setup_reducesum(self, device_labels, device_predicts, compute_func):
+    def setup_reduce(self, device_labels, device_predicts, compute_func, use_mean=True):
         '''
         default we add l2 loss
         '''
@@ -212,14 +208,14 @@ class Pipeline:
         for i, predict in device_predicts.items():
             labels = device_labels[i]
             
-            assert 'gpu_%s'%i in predict.name
+            assert 'GPU:%s'%i in predict.device
             assert labels.device == predict.device
             
             with tf.device(self.gpu_devices[i]):
                device_values[i] = compute_func(labels, predict)
 
         with tf.device(self.cpu_devices[0]):
-            value = self.reduce(device_values.values(), use_mean=False)
+            value = self.reduce(device_values.values(), use_mean)
         return value
         
     def setup_train(self, device_losses, opt):
@@ -234,8 +230,6 @@ class Pipeline:
                 tower_trainvars = self.vgr.get_trainable_variable(i)
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
-            print('tower_grad:')
-            print('\n'.join([g.name+":"+v.name for g,v in tower_grad]))
             for grad, v in tower_grad:
                 # for replicated ingore tower name 
                 v_mode_name = '/'.join(v.name.split('/')[1:])
