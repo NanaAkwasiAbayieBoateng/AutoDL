@@ -9,14 +9,19 @@
   - BlacePlament for low latency and limit bandwith such as PCI-E*16 
 
 
+
 ### **TODO**:
   1. **distribute support**: horovd(MPI) and broadcast_proxy.
      - horovd (MPI & Roce)
      - broadcast_proxy： seastear, DPDK
   2. **Auto hyterparam select**: detect the cpu, gpu, network limits, as much use evey resource
-
+     - detect system configure
+     - train and eval speed measure
   3. **Model zoo & Data zoo**: shared state of art some models.
+     - imagenet
 
+###　Benchmark
+  - DGX workstation: V100*4, NVLink 100GB, 1100 sample/sec for imagenet resnet50 batchsize:128
 
 ### grad variable sync strategy
 - multi machine
