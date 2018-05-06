@@ -60,7 +60,7 @@ class TrainStateHook(session_run_hook.SessionRunHook):
             self._last_steps = self._start_steps
             return 
 
-        if global_step <= (self._last_steps + self.every_steps):
+        if global_step < (self._last_steps + self.every_steps):
             return       
 
         elapsed_time  = time.time() - self._last_time

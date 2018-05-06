@@ -216,10 +216,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
         return image, label, bbox
 
     def augment(image, bbox):
-        image = imagenet_preprocessing.preprocess_image(image, bbox, 224, 224, 3, True)
-        
-        """ image has shape [224, 224, 3] need to transpose"""
-
+        image = imagenet_preprocessing.preprocess_image(image, bbox, 224, 224, 3, True)    
         return image
 
 
@@ -229,7 +226,12 @@ def imagenet_dataset(path, batch_size, repeat=-1):
 
         def map_fun(x):
             image, label, bbox = parser(x)
-            image = augment(image, bbox) if istrain else image
+            image = augment(image, bbox)
+            """ image has shape [224, 224, 3] need to transpose"""
+            print(image)
+            
+            image = tf.transpose(image, [2, 0, 1])
+            print(image.shape)
             return (image, label)
 
         ds = tf.data.Dataset.list_files(pattern)
@@ -250,7 +252,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
     train_set = load_tfrecords(
         path + "/train*", batch_size, repeat=-1, istrain=True)
     vaild_set = load_tfrecords(
-        path + "/validation*", batch_size, repeat=-1, istrain=False)
+        path + "/validation*", batch_size, repeat=1, istrain=False)
     return train_set, vaild_set
 
 

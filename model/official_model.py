@@ -4,7 +4,7 @@ from model import resnet_model
 
 class ImageNetModel:
     '''
-    work for imagenet
+    work for imagenet: copy from https://github.com/tensorflow/models/tree/master/official
     '''
     default_layer_config = {
         18: [2, 2, 2, 2],
@@ -14,15 +14,15 @@ class ImageNetModel:
         200: [3, 24, 36, 3]
     }
 
-    def __init__(self, layernums=50, num_classes=10):
+    def __init__(self, layernums=50, num_classes=10000):
         self.data_format = 'channels_first'
         self.version = resnet_model.DEFAULT_VERSION  # use v2
         self.dtype = tf.float32
-        self.final_size = 2048
+        self.bottleneck, self.final_size = (False, 512) if layernums < 50 else (True, 2048)
 
         self.model = resnet_model.Model(
             resnet_size=layernums,
-            bottleneck=True,
+            bottleneck=self.bottleneck,
             num_classes=num_classes,
             num_filters=64,
             kernel_size=7,
@@ -31,13 +31,16 @@ class ImageNetModel:
             first_pool_stride=2,
             second_pool_size=7,  #no used
             second_pool_stride=1,  #no used
-            block_sizes=ResnetModel.default_layer_config[layernums],
+            block_sizes=ImageNetModel.default_layer_config[layernums],
             block_strides=[1, 2, 2, 2],
             final_size=self.final_size,
             version=self.version,
             data_format=self.data_format)
 
     def __call__(self, inputs, training=True):
+        '''
+        inputs should be NCHW
+        '''
         return self.model(inputs, training)
 
 class Cifar10Model:

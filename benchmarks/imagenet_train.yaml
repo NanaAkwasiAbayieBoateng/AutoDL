@@ -1,0 +1,38 @@
+# use namedict for easy access members
+
+--- !NameDict
+# data set 
+data_path: ./test_dataset/imagenet_sample
+train_nums: 1250
+validation: 390
+class_num: 10000
+
+# train 
+minibatch: 2
+epoch: 100
+checkpoint_dir: checkpoint
+
+#model
+resnet_layer: 50
+
+# init_lr: initial_learning_rate*minibatch/batch_denom
+initial_learning_rate: 0.1
+batch_denom : 256
+
+# epoch
+boundaries:
+  - 30
+  - 60
+  - 80
+  - 90
+
+decay_rates:
+  - 1
+  - 0.1
+  - 0.01
+  - 0.001
+  - 0.0001
+
+# loss & opt
+weight_decay: 0.0004
+momentum: 0.9
