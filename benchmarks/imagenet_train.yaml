@@ -2,13 +2,13 @@
 
 --- !NameDict
 # data set 
-data_path: ./test_dataset/imagenet_sample
-train_nums: 1250
-validation: 390
+data_path: /root/tfrecords
+train_nums: 1280000
+validation: 50000
 class_num: 10000
 
 # train 
-minibatch: 2
+minibatch: 512
 epoch: 100
 checkpoint_dir: checkpoint
 
