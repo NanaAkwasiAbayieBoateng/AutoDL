@@ -18,8 +18,44 @@
 
 #include "common.h"
 
-namespace horovod {
+namespace shouter {
 namespace common {
+
+const std::string& MPIDataType_Name(MPIDataType value) {
+  switch (value) {
+  case SHOUTER_UINT8:
+    static const std::string uint8("uint8");
+    return uint8;
+  case SHOUTER_INT8:
+    static const std::string int8("int8");
+    return int8;
+  case SHOUTER_UINT16:
+    static const std::string uint16("uint16");
+    return uint16;
+  case SHOUTER_INT16:
+    static const std::string int16("int16");
+    return int16;
+  case SHOUTER_INT32:
+    static const std::string int32("int32");
+    return int32;
+  case SHOUTER_INT64:
+    static const std::string int64("int64");
+    return int64;
+  case SHOUTER_FLOAT32:
+    static const std::string float32("float32");
+    return float32;
+  case SHOUTER_FLOAT64:
+    static const std::string float64("float64");
+    return float64;
+  case SHOUTER_BOOL:
+    static const std::string bool_("bool");
+    return bool_;
+  default:
+    static const std::string unknown("<unknown>");
+    return unknown;
+  }
+}
+
 
 Status::Status() {
 }

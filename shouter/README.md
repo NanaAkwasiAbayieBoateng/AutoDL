@@ -80,5 +80,7 @@ TF Operation   ------(allreduce, brocast)------->     TF Operation
 　 channel -write->Message(step,TensorID,buffer)-read->  channel
                    [SeaStarTcpChannel] 
 ```
-
+### pybind
+- There are many c/c++ to python, now use pybind11 
+- Refer https://docs.microsoft.com/en-us/visualstudio/python/working-with-c-cpp-python-in-visual-studio#alternative-approaches
 

@@ -13,15 +13,18 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef HOROVOD_COMMON_H
-#define HOROVOD_COMMON_H
+#ifndef SHOUTER_COMMON_H
+#define SHOUTER_COMMON_H
+
+#include<stdint.h>
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "mpi_message.h"
 
-namespace horovod {
+
+namespace shouter {
 namespace common {
 
 // List of supported frameworks.
@@ -82,13 +85,40 @@ public:
   virtual ~PersistentBuffer(){};
 };
 
+enum MPIDataType {
+  SHOUTER_UINT8 = 0,
+  SHOUTER_INT8 = 1,
+  SHOUTER_UINT16 = 2,
+  SHOUTER_INT16 = 3,
+  SHOUTER_INT32 = 4,
+  SHOUTER_INT64 = 5,
+  SHOUTER_FLOAT32 = 6,
+  SHOUTER_FLOAT64 = 7,
+  SHOUTER_BOOL = 8
+};
+
+const std::string& MPIDataType_Name(MPIDataType value);
+
 class Tensor {
 public:
   virtual const MPIDataType dtype() const = 0;
   virtual const TensorShape shape() const = 0;
   virtual const void* data() const = 0;
   virtual int64_t size() const = 0;
+  // the id in graph , must keep all node id is same
+  virtual int64_t id() const = 0;
   virtual ~Tensor(){};
+};
+
+// every model variable is finalize
+class TensorTable {
+public:
+  
+  virtual int register_tensor(const Tensor* tensor);
+  virtual int size();
+
+  virtual Tensor* operator[](int id);
+  virtual Tensor* operator[](const std::string& name);
 };
 
 class OpContext {
