@@ -80,7 +80,23 @@ TF Operation   ------(allreduce, brocast)------->     TF Operation
 　 channel -write->Message(step,TensorID,buffer)-read->  channel
                    [SeaStarTcpChannel] 
 ```
-### pybind
+### pybind vs cython
 - There are many c/c++ to python, now use pybind11 
 - Refer https://docs.microsoft.com/en-us/visualstudio/python/working-with-c-cpp-python-in-visual-studio#alternative-approaches
 
+### seastar
+- c++17 what a extremist organization
+- build command
+```bash
+### install gcc6
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get update
+sudo apt-get install gcc-6 g++-6
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 --slave /usr/bin/g++ g++ /usr/bin/g++-6 
+### update ld
+
+### add dependency
+./configure.py --pie --so  --compiler=g++-5 --c-compiler=gcc-5 --cflags=-fPIE   --mode debug --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++14
+```
+- Features
+ - smp::submit_to(cpu, lambda)

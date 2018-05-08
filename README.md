@@ -23,6 +23,15 @@
 ###　Benchmark
   - DGX workstation: V100*4, NVLink 100GB, 1100 sample/sec for imagenet resnet50 batchsize:128
 
+
+### build
+
+```
+# update seastear
+git submodule update --init --recursive
+
+```
+
 ### grad variable sync strategy
 - multi machine
    - allreduce(RDMA + MPI) > RDMA + grpc > parameter server
@@ -62,3 +71,4 @@
           - access lantency: 0.02 ms
           
   - ZMQ: maybe a good choice for multi machine    
+

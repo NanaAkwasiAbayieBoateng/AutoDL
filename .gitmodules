@@ -1,0 +1,3 @@
+[submodule "shouter/seastar"]
+	path = shouter/seastar
+	url = https://github.com/scylladb/seastar.git
