@@ -96,7 +96,8 @@ sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 --slave /u
 ### update ld
 
 ### add dependency
-./configure.py --pie --so  --compiler=g++-5 --c-compiler=gcc-5 --cflags=-fPIE   --mode debug --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++14
+#debug mode has build error 
+./configure.py --pie --compiler=g++-5 --c-compiler=gcc-5 --cflags=-fPIC  --mode release  --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++14
 ```
 - Features
  - smp::submit_to(cpu, lambda)
