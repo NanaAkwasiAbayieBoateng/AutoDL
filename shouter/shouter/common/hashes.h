@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef HOROVOD_HASHES_H
-#define HOROVOD_HASHES_H
+#ifndef SHOUTER_HASHES_H
+#define SHOUTER_HASHES_H
 
 #include <functional>
 
@@ -60,12 +60,12 @@ template <typename U, typename V> struct hash<std::tuple<U, V>> {
   }
 };
 
-template <> struct hash<horovod::common::Framework> {
-  std::size_t operator()(horovod::common::Framework const& in) const {
+template <> struct hash<shouter::common::Framework> {
+  std::size_t operator()(shouter::common::Framework const& in) const {
     return (std::size_t)in;
   }
 };
 
 } // namespace std
 
-#endif // HOROVOD_HASHES_H
+#endif // SHOUTER_HASHES_H

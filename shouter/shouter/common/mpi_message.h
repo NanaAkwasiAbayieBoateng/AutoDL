@@ -22,27 +22,31 @@
 
 #include "common.h"
 
+
 namespace shouter {
 namespace common {
 
 
 
+#define offset_of(type, field) ( (unsigned int)&(((type *)(0))->field) )  
+#define container_of(ptr, type, field) (type *)((char *)ptr - offset_of(type, field)) 
 enum MessageCmd {READ, WRITE};
 
-class TensorMessage {
-public:
+
+struct TensorMessage {
+  
   uint8_t cmd;      // MessageCmd
   uint8_t srank;    // 256 is max worker num
-  uint8_t drank_0;  // srank -> [drank_0...drank_1]
-  uint8_t drank_1;  
+  uint8_t drank;    // srank -> [drank_0,...,drank_1]
+  uint8_t dmask;  
   uint32_t step;    // step 
-  uint32_t id;
+  uint32_t id;  
   uint32_t size;
-  uint8_t* buffer;  
+  uint8_t* buffer; 
+  static constexpr int Len = offset_of(TensorMessage, buffer);
 };
 
-
-
+} // namespace common
 } // namespace SHOUTER
 
 #endif // SHOUTER_MPI_MESSAGE_H
