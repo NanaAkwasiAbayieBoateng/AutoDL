@@ -18,7 +18,7 @@
 
 #include "timeline.h"
 
-namespace horovod {
+namespace shouter {
 namespace common {
 
 void Timeline::Initialize(std::string file_name) {

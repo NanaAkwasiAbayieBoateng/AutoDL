@@ -209,6 +209,28 @@ def test_compile(build_ext, name, code, libraries=None, include_dirs=None, libra
 
     return shared_object_file
 
+def try_compile_run(build_ext, name, code_file, libraries=None, include_dirs=None, library_dirs=None, macros=None,
+                 extra_preargs=None):
+    
+    test_compile_dir = os.path.join(build_ext.build_temp, 'test_compile')
+    if not os.path.exists(test_compile_dir):
+        os.makedirs(test_compile_dir)
+
+    source_file = code_file
+
+    compiler = build_ext.compiler
+    [object_file] = compiler.object_filenames([source_file])
+    execute_object_file = compiler.executable_filename(
+        name, output_dir=test_compile_dir)
+
+    compiler.compile([source_file], extra_preargs=extra_preargs,
+                     include_dirs=include_dirs, macros=macros)
+    compiler.link_executable(
+        [object_file], execute_object_file, libraries=libraries, library_dirs=library_dirs)
+
+    return execute_object_file          
+
+
 
 def get_cuda_dirs(build_ext, cpp_flags):
     cuda_include_dirs = []
@@ -400,12 +422,47 @@ def build_tf_extension(build_ext, options):
     return [flag for flag in tf_compile_flags if '_GLIBCXX_USE_CXX11_ABI' in flag]
 
 
+
+def build_test_case(build_ext, options, abi_compile_flags):
+    '''
+    '''
+    check_seastar_version()
+    seastar_cxxflags, seastar_link_flags = get_seastar_flags(build_ext,options)
+
+
 # run the customize_compiler
 class custom_build_ext(build_ext):
     def build_extensions(self):
         options = get_common_options(self)
         abi_compile_flags = build_tf_extension(self, options)
         build_common_extension(self, options, abi_compile_flags)
+        build_test_case(self, options, abi_compile_flags)
+
+
+class BuildTestCommand(distutils.cmd.Command):
+    """A custom command to run Test on all Python source files."""
+
+    description = 'run Test on Python source files'
+    user_options = [
+        # The format is (long option, short option, description).
+        ('seastar_build=', None, 'path to seastar build directory'),
+    ]
+
+    def initialize_options(self):
+        """Set default values for options."""
+        # Each user option must be listed here with their default value.
+        self.seastar_build = ''
+
+    def finalize_options(self):
+        """Post-process options."""
+        if self.seastar_build:
+           assert os.path.exists(self.pylint_rcfile), (
+          'Pylint config file %s does not exist.' % self.pylint_rcfile)
+
+    def run(self):
+          
+    
+
 
 
 setup(name='shouter',
@@ -422,5 +479,5 @@ setup(name='shouter',
           'License :: OSI Approved :: Apache Software License'
       ],
       ext_modules=[common_mpi_lib, tensorflow_ops_lib],
-      cmdclass={'build_ext': custom_build_ext},
+      cmdclass={'build_ext': custom_build_ext, 'build_test':BuildTestCommand},
       zip_safe=False)

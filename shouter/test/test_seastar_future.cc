@@ -5,6 +5,9 @@
 #include <iostream>
 #include <thread>
 
+
+#include <stdexcept>
+
 #include "core/future.hh"
 #include "core/reactor.hh"
 #include "core/sleep.hh"
@@ -40,34 +43,19 @@ seastar::future<> do_all() {
 
 
 seastar::future<> f(){
-  std::unique_ptr<int> p = std::make_unique<int>(100);
-  return slow_do_something(std::move(p)).then([](int i){
-      std::cout<<"slow_do_something:"<<i<<std::endl;
-  }).then([]{
-      return do_all();
-  });
+    std::cout << seastar::smp::count << "\n";
+    std::unique_ptr<int> p = std::make_unique<int>(100);
+    return slow_do_something(std::move(p)).then([](int i){
+        std::cout<<"slow_do_something:"<<i<<std::endl;
+    }).then([]{
+        return do_all();
+    });
 }
 
 
-
-
-
-#include <stdexcept>
-
 int main(int argc, char** argv) {
-    seastar::app_template app;
     
-    /*try {
-        app.run(argc, argv, [] {
-            std::cout << seastar::smp::count << "\n";
-            return seastar::make_ready_future<>();
-        });
-    } catch(...) {
-        std::cerr << "Failed to start application: "
-                  << std::current_exception() << "\n";
-        return 1;
-    }*/
-
+    seastar::app_template app;   
     app.run(argc, argv, f);
 
     return 0;

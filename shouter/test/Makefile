@@ -20,10 +20,10 @@ LDFLAGS ?= $(OPTFLAGS)
 
 TF_CXXFLAGS ?= $(shell $(PYTHON) -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.get_compile_flags()))')
 TF_LDFLAGS ?= $(shell $(PYTHON) -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.get_link_flags()))')
+
+
 PYTHON_CXXFLAGS ?= $(shell $(PYTHON_CONFIG) --includes)
 PYTHON_LDFLAGS ?= $(shell $(PYTHON_CONFIG) --ldflags)
-
-
 
 
 ## see pkg-config --cflags --libs $SEASTAR/build/release/seastar.pc
@@ -46,6 +46,8 @@ SHELL = bash
 
 CC_SOURCES = $(shell find $(SOURCE_DIR) -name "*.cc" | sed 's/^\.\///g')
 OBJS = $(addprefix $(BUILD_DIR)/,$(CC_SOURCES:.cc=.o))
+TRAGETS = $(basename $(OBJS))
+
 #OBJS = $(addprefix $(BUILD_DIR)/,$(CC_SOURCES:.cc=.o))
 DEPFILES = $(OBJS:.o=.d)
 
@@ -58,8 +60,7 @@ TF_SO = $(BUILD_DIR)/zmq_pull_op$(EXT_SUFFIX)
 
 
 
-.PHONY: build/test all
-
+.PHONY: all
 #all: $(ALL_SO)
 
 #$(TF_SO): $(SOURCE_DIR)/%$(EXT_SUFFIX): $(BUILD_DIR)/%.o
@@ -67,17 +68,19 @@ TF_SO = $(BUILD_DIR)/zmq_pull_op$(EXT_SUFFIX)
 #	@$(CXX) $^ -o $@ $(LDFLAGS) $(TF_LDFLAGS)
 #	@echo "done."
 
+all:$(TRAGETS) 
+
 $(PYBIND_SO): $(SOURCE_DIR)/%$(EXT_SUFFIX): $(BUILD_DIR)/%.o
 	@echo "Linking $@ ..."
 	@$(CXX) $^ -o $@ $(LDFLAGS) $(PYTHON_LDFLAGS)
 	@echo "done."
 
-build/test: $(OBJS) 
+build/%: build/%.o build/%.d 
 	@echo "Linking $(CXX) $^ -o $@ $(LDFLAGS) $(PYTHON_LDFLAGS)"
-	@$(CXX) $^ -o $@ $(CXXFLAGS) $(LDFLAGS) 
+	@$(CXX) $< -o $@ $(CXXFLAGS) $(LDFLAGS) 
 	@echo "done."
 
-build/%.o: %.cc build/%.d
+build/%.o: %.cc
 	@echo "[cc] $< ..."
 	@$(CXX) -c $< -o $@ $(CXXFLAGS)
 
@@ -86,5 +89,5 @@ build/%.d: %.cc Makefile
 	@$(CXX) $(CXXFLAGS) -MM -MT "$(OBJ_DIR)/$(<:.cc=.o) $(OBJ_DIR)/$(<:.cc=.d)" "$<"  > "$@" || rm "$@"
 	
 clean:
-	@rm -rvf $(BUILD_DIR)/* $(ALL_SO)
+	@rm -rvf $(BUILD_DIR)/*
 
