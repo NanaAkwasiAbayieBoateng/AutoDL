@@ -6,7 +6,7 @@
 #include <future>
 #include <thread>
 
-#include "common/mpi_message.h"
+#include "mpi_message.h"
 
 namespace shouter{
 
@@ -22,16 +22,25 @@ enum ChannelLinkType {
 class Proxy {
 
 public:
-   Proxy(int port, int threadnum):
-
-   std::shared_ptr<Proxy> setup_proxy(int port, int threadnum, )
    
+   // listen the port and start  parallel threads
+   static std::shared_ptr<Proxy> create_proxy(ChannelLinkType type, int port, int parallel);
+
+   
+   // manager channel 
    std::shared_ptr<Channel> get_channel(uint8_t rank);
    int cache_channel(uint8_t rank);
 
-   int run();
+   // process TensorId
+   int  onTensorMessage(){
+
+   }
+
+   int run();   
 
 };
+
+
 
 }
 #endif

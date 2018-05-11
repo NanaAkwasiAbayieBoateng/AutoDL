@@ -33,18 +33,25 @@ namespace common {
 enum MessageCmd {READ, WRITE};
 
 
-struct TensorMessage {
-  
+struct __attribute__((packed)) TensorMsgHeader {
   uint8_t cmd;      // MessageCmd
   uint8_t srank;    // 256 is max worker num
   uint8_t drank;    // srank -> [drank_0,...,drank_1]
   uint8_t dmask;  
-  uint32_t step;    // step 
-  uint32_t id;  
-  uint32_t size;
-  uint8_t* buffer; 
-  static constexpr int Len = offset_of(TensorMessage, buffer);
+  uint32_t step;    // step
+  
+  uint8_t  splice;   
+  uint32_t size:24;
+  uint32_t tensorid;
+  uint8_t* buffer;  
+  
 };
+static constexpr size_t TensorMsgHeader_LEN = sizeof(TensorMsgHeader);
+
+struct __attribute__((packed)) TensorMsgStatus {
+  uint8_t status;  
+};
+static constexpr size_t TensorMsgStatus_LEN = sizeof(TensorMsgStatus);
 
 } // namespace common
 } // namespace SHOUTER

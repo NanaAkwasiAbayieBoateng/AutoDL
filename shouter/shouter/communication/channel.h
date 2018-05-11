@@ -14,16 +14,13 @@ enum ChannelStatus { CHANNEL_INIT, CHANNEL_CONNECTING, CHANNEL_ESTABLISH, CHANNE
 
 // A channcel is interface for data stream transmission
 // As i prefer libco, not future or promise but for tcp stack, seastar is hard to refuse.
-template<class SocketType>
+
 class Channel {
 public:
    // only move 
    Channel() = delete;
    Channel(Channel&&) = default;
-   Channel(SocketType&& sock):conn(std::move(sock)){}
-   
-private:
-   SeastarConnection conn;
+ 
 public:
    ChannelStatus status(){return conn.status;}
 
@@ -36,8 +33,6 @@ public:
 };
 
 
-class SeastarConnection;
-using SeastarChannel = Channel<SeastarConnection>;
 
 }
 #endif

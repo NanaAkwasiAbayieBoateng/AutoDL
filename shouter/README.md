@@ -96,8 +96,12 @@ sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 --slave /u
 ### update ld
 
 ### add dependency
-#debug mode has build error 
-./configure.py --pie --compiler=g++-5 --c-compiler=gcc-5 --cflags=-fPIC  --mode release  --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++14
+sud apt install libboost-dev protobuf jsoncpp python3.0-dev  pyparsing  ragel ninja
+
+### update submodule
+git submodule --update --recursive
+
+./configure.py --pie --cflags=-fPIE --mode debug --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++17
 ```
 - Features
  - smp::submit_to(cpu, lambda)
