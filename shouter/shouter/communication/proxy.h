@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "mpi_message.h"
+#include "channel.h"
 
 namespace shouter{
 
@@ -17,30 +18,23 @@ enum ChannelLinkType {
 };
 
 
+
 // A worker only has one Proxy use multi-thread to control every channel
 // only take the communication
 class Proxy {
 
 public:
-   
    // listen the port and start  parallel threads
-   static std::shared_ptr<Proxy> create_proxy(ChannelLinkType type, int port, int parallel);
-
-   
+   static std::shared_ptr<Proxy> create_proxy(ChannelLinkType type, 
+                                 const std::vector<std::string>& ips, int port, int parallel, ChannelHandler&& handler);
    // manager channel 
-   std::shared_ptr<Channel> get_channel(uint8_t rank);
-   int cache_channel(uint8_t rank);
+   virtual std::shared_ptr<Channel> get_channel(uint8_t id);  
 
-   // process TensorId
-   int  onTensorMessage(){
 
-   }
-
-   int run();   
-
+   virtual int run();
 };
 
-
-
 }
+
+
 #endif

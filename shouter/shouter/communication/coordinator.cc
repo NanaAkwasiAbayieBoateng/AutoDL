@@ -28,10 +28,18 @@ public:
 
     int brocast(step, Tensor, uint8_t rank0, uint8_t rank1)
     {
-         ring[rank0][j&mask] = writeMesage
+        _proxy.send(local, all , mask );
+        then wait()
+        then.sum 
+        then relace;
     }
 
     int reduce(step, Tensor, uint8_t rank0, uint8_t rank1){
+
+        _proxy.send(local, all , mask );
+        then wait()
+        then.sum 
+        then relace;
 
         ring[rank0][j&mask] = readMesage
     }
@@ -49,6 +57,7 @@ private:
 
    TensorTable _local_tensor_table;
    TensorTable _global_tensor_table;
+   
    Proxy _proxy;   
 };
 

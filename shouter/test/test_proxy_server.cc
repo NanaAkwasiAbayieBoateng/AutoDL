@@ -2,11 +2,8 @@
 
 using namespace shouter;
 
-TensorMsgStatus print_tensor(TensorMsgHeader & reqheader){
 
-   
-   return {0};
-}
+
 
 
 

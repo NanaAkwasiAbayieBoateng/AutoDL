@@ -1,4 +1,4 @@
-// Test funture and promis performance
+// Test funture and promis performancex
 // complie g++ -std=c++14 -I/home/tanguofu/workspace/seastar test_future.cpp
 // 
 

@@ -10,10 +10,19 @@
 
 namespace shouter{
 
-enum ChannelStatus { CHANNEL_INIT, CHANNEL_CONNECTING, CHANNEL_ESTABLISH, CHANNEL_FAIL, CHANNEL_ERROR, CHANNEL_CLOSED};
 
 // A channcel is interface for data stream transmission
 // As i prefer libco, not future or promise but for tcp stack, seastar is hard to refuse.
+class ChannelHandler {
+public:
+    ennum Status{HEAD,BODY,ERROR}
+    
+    // return 
+    virtual int on_msg_header(char* header);
+
+    virtual int on_msg_body(char* body);
+
+};
 
 class Channel {
 public:
@@ -22,13 +31,12 @@ public:
    Channel(Channel&&) = default;
  
 public:
-   ChannelStatus status(){return conn.status;}
+   ChannelStatus status(){return _status;}
 
-   std::future<int> write(const TensorMessage& msg){
-        return conn.send(TensorMessage)
-        
-   }
-   std::future<int> read(const TensorMessage& msg);
+   
+   virtual future<> write(Tensor T); 
+
+   virtual future<TensorMsgBody> read(Tensor T);
 
 };
 

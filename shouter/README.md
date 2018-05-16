@@ -67,22 +67,33 @@ TFOP ->|
 - shouter.allreduce(tensor): recevie tensor from master
 
 
-### architecture
+### architecture design
 ```
-    Node A                                               Node B    
-TF Operation   ------(allreduce, brocast)------->     TF Operation  
+# global: TensorTable, topological structure(Ring/P2P/Fattree)
+
+    Node A                                              Node B         
+TF Operation   ------(allreduce, brocast)------->    TF Operation  
         |                                                 |                    
         V                                                 V
-  coordinator -(step,rank,Tensor(name,shape,buffer)->  coordinator
-    /   |                                                 |   \
- Proxy  |             [SeaStarTcpProxy]                   |   Proxy
-    \   v                                                 V   /
-　 channel -write->Message(step,TensorID,buffer)-read->  channel
-                   [SeaStarTcpChannel] 
+  coordinator - channel(step,rank,Tensor(id)------>  coordinator
+        |                                                 |  
+        |             [SeaStarTcpProxy]                   |   
+        v                                                 V   
+　   Proxy -write->Message(step,TensorID,buffer)-read->  proxy
+        |            [SeaStarTcpChannel]                  |      
+        V                                                 v
+   send_connection  -send-> (buffer, size)-> recv--  recv_connection
+
 ```
+- Tensor Meta : As all tensor are fixed at start train, so each node has a tensortable, then tensor message just set a id
+- Coordinator : Dispatch or  Schedule the tensor to sync, as graph commpute order, the first layer shoud be sync at first.
+- Proxy:  Dispatch or  Schedule the tensormessage to sync, as P2P brocast all the node at same time
+
+
 ### pybind vs cython
 - There are many c/c++ to python, now use pybind11 
 - Refer https://docs.microsoft.com/en-us/visualstudio/python/working-with-c-cpp-python-in-visual-studio#alternative-approaches
+- if c code cython module may be better choice.
 
 ### seastar
 - c++17 what a extremist organization

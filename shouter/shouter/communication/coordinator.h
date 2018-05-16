@@ -21,13 +21,18 @@ public:
 
     int brocast(step, Tensor, uint8_t rank0, uint8_t rank1);
     int reduce(step, Tensor, uint8_t rank0, uint8_t rank1);
+
     int allreduce(step, Tensor);
     int allbrocast(step, Tensor);
 
+
+
+    int loop();
+
 private:
 
-   TensorTable _local_tensor_table;
    TensorTable _global_tensor_table;
+   
    Proxy _proxy;   
 };
 
