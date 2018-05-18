@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "includePath": [
+                "/usr/include/",
+                "/usr/local/cuda-9.0/targets/x86_64-linux/include",
+                "/usr/local/lib/python3.5/dist-packages/tensorflow/include",
+                "${workspaceFolder}",
+                "${workspaceFolder}/shouter/shouter"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}
