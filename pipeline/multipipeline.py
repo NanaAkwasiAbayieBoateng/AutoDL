@@ -226,6 +226,9 @@ class Pipeline:
 
         with tf.device(self.cpu_devices[0]):
             sum_loss = self.reduce(device_losses.values(), use_mean=False)
+        
+        if self.node_reduce and self.rank == 0:
+            sum_loss = self.node_reduce.reduce(sum_loss)
 
         return device_losses, sum_loss
 
@@ -245,6 +248,10 @@ class Pipeline:
 
         with tf.device(self.cpu_devices[0]):
             value = self.reduce(device_values.values(), use_mean)
+        
+        if self.node_reduce and self.rank == 0:
+            sum_loss = self.node_reduce.reduce(sum_loss, use_mean)
+        
         return value
 
     def setup_train(self, device_losses, opt):

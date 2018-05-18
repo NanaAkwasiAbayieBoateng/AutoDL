@@ -33,46 +33,12 @@ from shouter.common import mpi_threads_supported
 
 from shouter.tensorflow.mpi_ops import allgather
 from shouter.tensorflow.mpi_ops import broadcast
-from shouter.tensorflow.mpi_ops import _allreduce
+from shouter.tensorflow.mpi_ops import allreduce
 
 
-def allreduce(tensor, average=True, device_dense='', device_sparse=''):
-    """Perform an allreduce on a tf.Tensor or tf.IndexedSlices.
 
-    Arguments:
-        tensor: tf.Tensor, tf.Variable, or tf.IndexedSlices to reduce.
-        The shape of the input must be identical across all ranks.
-        average: If True, computes the average over all ranks.
-                 Otherwise, computes the sum over all ranks.
-        device_dense: Device to be used for dense tensors. Uses GPU by default
-                      if Horovod was build with HOROVOD_GPU_ALLREDUCE.
-        device_sparse: Device to be used for sparse tensors. Uses GPU by default
-                       if Horovod was build with HOROVOD_GPU_ALLGATHER.
 
-    This function performs a bandwidth-optimal ring allreduce on the input
-    tensor. If the input is an tf.IndexedSlices, the function instead does an
-    allgather on the values and the indices, effectively doing an allreduce on
-    the represented tensor.
-    """
-    if isinstance(tensor, tf.IndexedSlices):
-        with tf.device(device_sparse):
-            # For IndexedSlices, do two allgathers intead of an allreduce.
-            horovod_size = tf.cast(size(), tensor.values.dtype)
-            values = allgather(tensor.values)
-            indices = allgather(tensor.indices)
 
-            # To make this operation into an average, divide all gathered values by
-            # the Horovod size.
-            new_values = tf.div(values, horovod_size) if average else values
-        return tf.IndexedSlices(new_values, indices,
-                                dense_shape=tensor.dense_shape)
-    else:
-        with tf.device(device_dense):
-            horovod_size = tf.cast(size(), tensor.dtype)
-            summed_tensor = _allreduce(tensor)
-            new_tensor = (tf.div(summed_tensor, horovod_size)
-                          if average else summed_tensor)
-        return new_tensor
 
 
 def broadcast_global_variables(root_rank):

@@ -112,3 +112,14 @@ def mpi_threads_supported():
         raise ValueError(
             'Horovod has not been initialized; use hvd.init().')
     return bool(mpi_threads_supported)
+
+
+# now the tensorid table 
+class TensorMetaTable:
+    # class member
+    tensor_meta = []
+
+    @classmethod
+    def add(cls, tensor):
+        cls.tensor_meta.append(tensor)
+    

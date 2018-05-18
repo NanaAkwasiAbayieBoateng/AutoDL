@@ -58,6 +58,9 @@ int shouter_local_size();
 // C interface to return flag indicating whether MPI multi-threading is
 // supported. Returns -1 if Horovod is not initialized.
 int shouter_mpi_threads_supported();
+
+
+
 }
 
 Status EnqueueTensorAllreduce(std::shared_ptr<OpContext> context,

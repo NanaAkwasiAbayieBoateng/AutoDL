@@ -61,7 +61,7 @@ def _normalize_name(name):
     return re.sub('[^a-zA-Z0-9_]', '_', name)
 
 
-def _allreduce(tensor, name=None):
+def allreduce(tensor, name=None):
     """An op which sums an input tensor over all the Shouter processes.
 
     The reduction operation is keyed by the name of the op. The tensor type and
@@ -71,12 +71,13 @@ def _allreduce(tensor, name=None):
     Returns:
       A tensor of the same shape and type as `tensor`, summed across all
       processes.
+    
+    
     """
     if name is None:
         name = 'ShouterAllreduce_%s' % _normalize_name(tensor.name)
+    
     return SHOUTER_LIB.Shouter_allreduce(tensor, name=name)
-
-
 ops.NotDifferentiable('ShouterAllreduce')
 
 
@@ -97,10 +98,7 @@ def allgather(tensor, name=None):
     if name is None:
         name = 'ShouterAllgather_%s' % _normalize_name(tensor.name)
     return SHOUTER_LIB.Shouter_allgather(tensor, name=name)
-
-
 ops.NotDifferentiable('ShouterAllgather')
-
 
 def broadcast(tensor, root_rank, name=None):
     """An op which broadcasts the input tensor on root rank to the same input tensor
@@ -117,6 +115,4 @@ def broadcast(tensor, root_rank, name=None):
     if name is None:
         name = 'ShouterBroadcast_%s' % _normalize_name(tensor.name)
     return SHOUTER_LIB.Shouter_broadcast(tensor, name=name, root_rank=root_rank)
-
-
 ops.NotDifferentiable('ShouterBroadcast')

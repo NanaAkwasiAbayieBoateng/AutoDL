@@ -102,7 +102,8 @@ def main(argv):
     create_model_func = official_model.Cifar10Model(param.resnet_layer, param.class_num)
 
     train_set, vaild_set, eval__set = cifar10_dataset(param.data_path, param.batch_size, param.epoch)
-
+    
+    global_step = tf.train.get_or_create_global_step()
     lr = PiecewiseLR(param)
     opt = tf.train.MomentumOptimizer(lr, param.momentum)
 
@@ -130,7 +131,7 @@ def main(argv):
     #3.3 set_up gradient compute and update
     train_op = pipe.setup_train(device_losses, opt)
     
-    global_step = tf.train.get_global_step()
+    
     #TODO add restore hook
     
     hooks = pipe.get_hook() + [
