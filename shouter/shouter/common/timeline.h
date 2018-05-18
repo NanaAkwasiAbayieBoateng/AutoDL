@@ -25,7 +25,7 @@
 #include "common.h"
 #include "mpi_message.h"
 
-namespace horovod {
+namespace shouter {
 namespace common {
 
 // How frequently Horovod Timeline should be flushed to disk.
@@ -39,12 +39,12 @@ class Timeline {
 public:
   void Initialize(std::string file_name);
   bool Initialized() const;
-  void NegotiateStart(const std::string& tensor_name,
-                      const MPIRequest::RequestType request_type);
+
+  void NegotiateStart(const std::string& tensor_name, int cmd);
   void NegotiateRankReady(const std::string& tensor_name, const int rank);
   void NegotiateEnd(const std::string& tensor_name);
-  void Start(const std::string& tensor_name,
-             const MPIResponse::ResponseType response_type);
+
+  void Start(const std::string& tensor_name, int cmd);
   void ActivityStart(const std::string& tensor_name,
                      const std::string& activity);
   void ActivityEnd(const std::string& tensor_name);

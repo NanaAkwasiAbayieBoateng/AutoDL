@@ -99,20 +99,22 @@ TF Operation   ------(allreduce, brocast)------->    TF Operation
 - c++17 what a extremist organization
 - build command
 ```bash
+
+### add dependency
+sudo apt install software-properties-common 
+sudo apt install -y ninja-build ragel libhwloc-dev libnuma-dev libpciaccess-dev libcrypto++-dev libboost-all-dev libxml2-dev xfslibs-dev libgnutls28-dev liblz4-dev libsctp-dev gcc make libprotobuf-dev protobuf-compiler python3 libunwind8-dev systemtap-sdt-dev libtool cmake libyaml-cpp-dev
+
+
 ### install gcc6
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
 sudo apt-get update
-sudo apt-get install gcc-6 g++-6
-sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 --slave /usr/bin/g++ g++ /usr/bin/g++-6 
-### update ld
-
-### add dependency
-sud apt install libboost-dev protobuf jsoncpp python3.0-dev  pyparsing  ragel ninja
+sudo apt-get install gcc-7 g++-7
 
 ### update submodule
-git submodule --update --recursive
+git submodule init 
+git submodule --update --recursive git submodule update --recursive
 
-./configure.py --pie --cflags=-fPIE --mode debug --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++17
+./configure.py --compiler=/usr/bin/g++-7 --c-compiler=/usr/bin/gcc-7  --pie --cflags="-fPIC -D_GLIBCXX_USE_CXX11_ABI=0" --mode debug --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++17
 ```
 - Features
  - smp::submit_to(cpu, lambda)

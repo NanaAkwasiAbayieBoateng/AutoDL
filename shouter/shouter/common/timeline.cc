@@ -104,14 +104,13 @@ void Timeline::WriteEvent(const std::string& tensor_name, const char phase,
   }
 }
 
-void Timeline::NegotiateStart(const std::string& tensor_name,
-                              const MPIRequest::RequestType request_type) {
+void Timeline::NegotiateStart(const std::string& tensor_name,int cmd) {
   if (!initialized_) {
     return;
   }
   assert(tensor_states_[tensor_name] == TimelineState::UNKNOWN);
   auto event_category =
-      "NEGOTIATE_" + MPIRequest::RequestType_Name(request_type);
+      "NEGOTIATE_" + std::string(message_cmd_name(cmd));
   WriteEvent(tensor_name, 'B', event_category);
   tensor_states_[tensor_name] = TimelineState::NEGOTIATING;
 }
@@ -134,13 +133,12 @@ void Timeline::NegotiateEnd(const std::string& tensor_name) {
   tensor_states_.erase(tensor_name);
 }
 
-void Timeline::Start(const std::string& tensor_name,
-                     const MPIResponse::ResponseType response_type) {
+void Timeline::Start(const std::string& tensor_name,int cmd) {
   if (!initialized_) {
     return;
   }
   assert(tensor_states_[tensor_name] == TimelineState::UNKNOWN);
-  auto event_category = MPIResponse::ResponseType_Name(response_type);
+  auto event_category = std::string(message_cmd_name(cmd));
   WriteEvent(tensor_name, 'B', event_category);
   tensor_states_[tensor_name] = TimelineState::TOP_LEVEL;
 }

@@ -24,6 +24,13 @@ from __future__ import print_function
 
 import tensorflow as tf
 
+from shouter.common import init
+from shouter.common import size
+from shouter.common import local_size
+from shouter.common import rank
+from shouter.common import local_rank
+from shouter.common import mpi_threads_supported
+
 from shouter.tensorflow.mpi_ops import allgather
 from shouter.tensorflow.mpi_ops import broadcast
 from shouter.tensorflow.mpi_ops import _allreduce

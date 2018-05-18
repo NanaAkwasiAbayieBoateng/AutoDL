@@ -2,7 +2,7 @@
 #ifndef SHOUTER_DEVICE_HELPER_H
 #define SHOUTER_DEVICE_HELPER_H
 
-#include<stdint.h>
+#include <stdint.h>
 
 #include <memory>
 #include <string>
@@ -15,7 +15,7 @@ namespace common {
 
 // get all ip addr in local devices
 
-int list_ipaddrs(std::vector<std::string>& ips){
+static int list_ipaddrs(std::vector<std::string>& ips){
 
   return 0;
 }

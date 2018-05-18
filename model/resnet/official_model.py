@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from model import resnet_model
+from . import resnet_model
 
 class ImageNetModel:
     '''

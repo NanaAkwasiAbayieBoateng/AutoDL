@@ -20,7 +20,6 @@
 #include <string>
 #include <vector>
 
-#include "common.h"
 
 
 namespace shouter {
@@ -33,43 +32,52 @@ namespace common {
 
 enum MessageCmd {READ, WRITE};
 
+const char* message_cmd_name(int cmd);
+
 // all message process async,  for A read message from B:
 //   1. A send a ReadMesage  to B
 //   2. B set write message A when tensor is ready.
 
-// the stream is TensorMsgHeader + TensorMsgBody*N + TensorMsgBody(tensorid 0)
+// the stream is TensorMessage buffer TensorMessage TensorMessage for easy decode and encode
 
 // START_SEC is 2018-01-01 00:00:00 timestamp
-static constexpr uint32_t START_SEC = 1514736000; 
-struct __attribute__((packed)) TensorMsgHeader {
-  uint8_t  cmd;      // MessageCmd
-  uint8_t  srank;    // 256 is max worker num
-  uint8_t  drank;
-  uint8_t  dmask;
-  uint32_t step;     // step 
-  uint32_t req_sec;  // for trace (now() - START_SEC)*1000 + ms * 1000
-  uint32_t operid;  // for read  write seq is same the read seq
+static constexpr uint32_t START_SEC = 1514736000;
+
+
+struct __attribute__((packed)) TensorMessage {
+  uint8_t  cmd:4;       // MessageCmd
+  uint32_t magic:28;    // fixed: 12f0c8d, to verify the message is right
+  uint32_t step;        // global_step
+
+  uint32_t req_sec;     // for trace (now() - START_SEC)*1000 + ms * 1000  
+  uint8_t  slice:8;     // Max 256 if each connect between send a peer
+  uint32_t tensorid:24; // 16777216 variable nums
+
+  // uint32_t size;     // the size can be 
+  char* buffer[0];      //  only for read, take no Space body
 };
-static constexpr size_t TensorMsgHeader_LEN = sizeof(TensorMsgHeader);
-
-// as the channel is stream, so need keep the stream packet is right
-int vaid_header(TensorMsgHeader& h);
 
 
-
-static_assert(TensorMsgHeader_LEN == 16, "TensorMsgHeader must be 16 byte");
-
-// end msage is tensorid 0
-struct __attribute__((packed)) TensorMsgBody {
-  uint32_t tensorid;
-  uint8_t  splice;   // Max 256(rank ) splice 
-  uint32_t size:24;  // Max 16G buffer;
-  char* buffer[0];    
+// for cache the message 
+struct __attribute__((packed)) TensorMessageNode{
+  uint64_t pad1;  // keep magic
+  TensorMessageNode *next;
 };
-static constexpr size_t TensorMsgBody_LEN = sizeof(TensorMsgBody);
-static_assert(TensorMsgBody_LEN == 8, "TensorMsgBody must be 16 byte");
-// as the channel is stream, so need keep the stream packet is right
-int vaid_body(TensorMsgHeader& h);
+
+static constexpr size_t TensorMessageLen = sizeof(TensorMessage);
+static constexpr size_t TensorMessageNodeLen = sizeof(TensorMessageNode);
+
+#define SetTensorMessageMagic(m)            (m->magic = 0x12f0c8d)
+#define CheckTensorMessageMagic(m)  (m->magic == 0x12f0c8d)
+
+// just a helper function, call every thread
+void allocate_thread_message(int num);
+
+TensorMessage* make_message(int cmd, int step, int tensorid, int slice);
+
+void free_message(TensorMessage* m);
+
+
 } // namespace common
 } // namespace SHOUTER
 

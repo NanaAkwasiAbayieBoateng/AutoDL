@@ -24,18 +24,22 @@
 #include "tensorflow/core/framework/shape_inference.h"
 
 #define EIGEN_USE_THREADS
+#define HAVE_CUDA 1
 
 #if HAVE_CUDA
 #include "tensorflow/stream_executor/stream.h"
 #endif
 
 #define OMPI_SKIP_MPICXX
-#include "../common/operations.h"
+#define CPU_DEVICE_ID -1
+
+#include "common/common.h"
+#include "common/operations.h"
 
 using namespace tensorflow;
-using namespace horovod;
+using namespace shouter;
 
-namespace horovod {
+namespace shouter {
 namespace tensorflow {
 
 namespace {
@@ -98,9 +102,10 @@ public:
   virtual const common::TensorShape shape() const override;
   virtual const void* data() const override;
   virtual int64_t size() const override;
-
+  virtual int id() const override;
 protected:
   ::tensorflow::Tensor tensor_;
+  int _id;
 };
 
 class TFOpContext : public common::OpContext {
@@ -168,28 +173,28 @@ const void* TFPersistentBuffer::AccessData(
       .data();
 }
 
-TFTensor::TFTensor(::tensorflow::Tensor& tensor) : tensor_(tensor) {}
+TFTensor::TFTensor(::tensorflow::Tensor& tensor) : tensor_(tensor), _id(-1) {}
 
 const common::MPIDataType TFTensor::dtype() const {
   switch (tensor_.dtype()) {
   case DT_UINT8:
-    return common::HOROVOD_UINT8;
+    return common::SHOUTER_UINT8;
   case DT_INT8:
-    return common::HOROVOD_INT8;
+    return common::SHOUTER_INT8;
   case DT_UINT16:
-    return common::HOROVOD_UINT16;
+    return common::SHOUTER_UINT16;
   case DT_INT16:
-    return common::HOROVOD_INT16;
+    return common::SHOUTER_INT16;
   case DT_INT32:
-    return common::HOROVOD_INT32;
+    return common::SHOUTER_INT32;
   case DT_INT64:
-    return common::HOROVOD_INT64;
+    return common::SHOUTER_INT64;
   case DT_FLOAT:
-    return common::HOROVOD_FLOAT32;
+    return common::SHOUTER_FLOAT32;
   case DT_DOUBLE:
-    return common::HOROVOD_FLOAT64;
+    return common::SHOUTER_FLOAT64;
   case DT_BOOL:
-    return common::HOROVOD_BOOL;
+    return common::SHOUTER_BOOL;
   default:
     throw std::logic_error("Invalid tensor type.");
   }
@@ -206,6 +211,9 @@ const common::TensorShape TFTensor::shape() const {
 const void* TFTensor::data() const { return (const void*)tensor_.tensor_data().data(); }
 
 int64_t TFTensor::size() const { return (int64_t)tensor_.tensor_data().size(); }
+
+int TFTensor::id() const { return _id; }
+
 
 TFOpContext::TFOpContext(OpKernelContext* context) : context_(context) {}
 
@@ -271,9 +279,9 @@ TFReadyEvent* RecordReadyEvent(OpKernelContext* context) {
 
 } // namespace
 
-class HorovodAllreduceOp : public AsyncOpKernel {
+class ShouterAllreduceOp : public AsyncOpKernel {
 public:
-  explicit HorovodAllreduceOp(OpKernelConstruction* context)
+  explicit ShouterAllreduceOp(OpKernelConstruction* context)
       : AsyncOpKernel(context) {}
 
   void ComputeAsync(OpKernelContext* context, DoneCallback done) override {
@@ -301,14 +309,14 @@ public:
   }
 };
 
-REGISTER_KERNEL_BUILDER(Name("HorovodAllreduce").Device(DEVICE_CPU),
-                        HorovodAllreduceOp);
-#if HOROVOD_GPU_ALLREDUCE
-REGISTER_KERNEL_BUILDER(Name("HorovodAllreduce").Device(DEVICE_GPU),
-                        HorovodAllreduceOp);
+REGISTER_KERNEL_BUILDER(Name("ShouterAllreduce").Device(DEVICE_CPU),
+                        ShouterAllreduceOp);
+#if Shouter_GPU_ALLREDUCE
+REGISTER_KERNEL_BUILDER(Name("ShouterAllreduce").Device(DEVICE_GPU),
+                        ShouterAllreduceOp);
 #endif
 
-REGISTER_OP("HorovodAllreduce")
+REGISTER_OP("ShouterAllreduce")
     .Attr("T: {int32, int64, float32, float64}")
     .Input("tensor: T")
     .Output("sum: T")
@@ -329,9 +337,9 @@ Output
     sum:    A tensor with the same shape as `tensor`, summed across all MPI processes.
 )doc");
 
-class HorovodAllgatherOp : public AsyncOpKernel {
+class ShouterAllgatherOp : public AsyncOpKernel {
 public:
-  explicit HorovodAllgatherOp(OpKernelConstruction* context)
+  explicit ShouterAllgatherOp(OpKernelConstruction* context)
       : AsyncOpKernel(context) {}
 
   void ComputeAsync(OpKernelContext* context, DoneCallback done) override {
@@ -357,14 +365,14 @@ public:
   }
 }; // namespace tensorflow
 
-REGISTER_KERNEL_BUILDER(Name("HorovodAllgather").Device(DEVICE_CPU),
-                        HorovodAllgatherOp);
-#if HOROVOD_GPU_ALLGATHER
-REGISTER_KERNEL_BUILDER(Name("HorovodAllgather").Device(DEVICE_GPU),
-                        HorovodAllgatherOp);
+REGISTER_KERNEL_BUILDER(Name("ShouterAllgather").Device(DEVICE_CPU),
+                        ShouterAllgatherOp);
+#if Shouter_GPU_ALLGATHER
+REGISTER_KERNEL_BUILDER(Name("ShouterAllgather").Device(DEVICE_GPU),
+                        ShouterAllgatherOp);
 #endif
 
-REGISTER_OP("HorovodAllgather")
+REGISTER_OP("ShouterAllgather")
     .Attr(
         "T: {uint8, int8, uint16, int16, int32, int64, float32, float64, bool}")
     .Input("tensor: T")
@@ -388,9 +396,9 @@ Output
     gathered:    A tensor with the same shape as `tensor` except for the first dimension.
 )doc");
 
-class HorovodBroadcastOp : public AsyncOpKernel {
+class ShouterBroadcastOp : public AsyncOpKernel {
 public:
-  explicit HorovodBroadcastOp(OpKernelConstruction* context)
+  explicit ShouterBroadcastOp(OpKernelConstruction* context)
       : AsyncOpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("root_rank", &root_rank_));
   }
@@ -403,7 +411,7 @@ public:
     auto device = GetDeviceID(context);
     auto tensor = context->input(0);
     Tensor* output = nullptr;
-    if (common::horovod_rank() == root_rank_) {
+    if (common::shouter_rank() == root_rank_) {
       context->set_output(0, tensor);
     } else {
       OP_REQUIRES_OK_ASYNC(
@@ -430,14 +438,14 @@ private:
   int root_rank_;
 };
 
-REGISTER_KERNEL_BUILDER(Name("HorovodBroadcast").Device(DEVICE_CPU),
-                        HorovodBroadcastOp);
-#if HOROVOD_GPU_BROADCAST
-REGISTER_KERNEL_BUILDER(Name("HorovodBroadcast").Device(DEVICE_GPU),
-                        HorovodBroadcastOp);
+REGISTER_KERNEL_BUILDER(Name("ShouterBroadcast").Device(DEVICE_CPU),
+                        ShouterBroadcastOp);
+#if Shouter_GPU_BROADCAST
+REGISTER_KERNEL_BUILDER(Name("ShouterBroadcast").Device(DEVICE_GPU),
+                        ShouterBroadcastOp);
 #endif
 
-REGISTER_OP("HorovodBroadcast")
+REGISTER_OP("ShouterBroadcast")
     .Attr(
         "T: {uint8, int8, uint16, int16, int32, int64, float32, float64, bool}")
     .Attr("root_rank: int")
@@ -461,4 +469,4 @@ Output
 )doc");
 
 } // namespace tensorflow
-} // namespace horovod
+} // namespace Shouter

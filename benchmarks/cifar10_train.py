@@ -29,7 +29,8 @@ import train_hook
 
 '''
 setup:
-    1. install nccl2:
+    1. install nccl2: 
+        perfer : NCCL 2.1.0, this issue is no longer present when using CUDA 9,
         https://docs.nvidia.com/deeplearning/sdk/nccl-install-guide/index.html
   
     2. install openmpi3.0:
@@ -54,6 +55,9 @@ setup:
     5. # Set default NCCL parameters
         echo NCCL_DEBUG=INFO >> /etc/nccl.conf && \
         echo NCCL_SOCKET_IFNAME=^docker0 >> /etc/nccl.conf
+    6. for nvidia docker 
+        --shm-size=1g --ulimit memlock=-1
+
     
 
 

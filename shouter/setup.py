@@ -16,6 +16,7 @@ import os
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 from distutils.errors import CompileError, DistutilsError, DistutilsPlatformError, LinkError
+from distutils.cmd import Command
 import shlex
 import subprocess
 import sys
@@ -48,11 +49,13 @@ def check_tf_version():
 def get_cpp_flags(build_ext):
     last_err = None
     default_flags = ['-std=c++11', '-fPIC', '-O2']
+ 
     if sys.platform == 'darwin':
         # Darwin most likely will have Clang, which has libc++.
         flags_to_try = [default_flags + ['-stdlib=libc++'], default_flags]
     else:
         flags_to_try = [default_flags, default_flags + ['-stdlib=libc++']]
+
     for cpp_flags in flags_to_try:
         try:
             test_compile(build_ext, 'test_cpp_flags', extra_preargs=cpp_flags,
@@ -71,6 +74,11 @@ def get_cpp_flags(build_ext):
 
     raise DistutilsPlatformError(last_err)
 
+def get_current_dirs():
+    current_file = os.path.realpath(__file__)
+    return '/'.join(current_file.split('/')[:-1])
+
+    
 
 def get_tf_include_dirs():
     import tensorflow as tf
@@ -198,6 +206,7 @@ def test_compile(build_ext, name, code, libraries=None, include_dirs=None, libra
         f.write(code)
 
     compiler = build_ext.compiler
+
     [object_file] = compiler.object_filenames([source_file])
     shared_object_file = compiler.shared_object_filename(
         name, output_dir=test_compile_dir)
@@ -219,14 +228,18 @@ def try_compile_run(build_ext, name, code_file, libraries=None, include_dirs=Non
     source_file = code_file
 
     compiler = build_ext.compiler
-    [object_file] = compiler.object_filenames([source_file])
+
+    [object_file] = compiler.object_filenames([source_file], output_dir=test_compile_dir)
+    print(object_file)
+
     execute_object_file = compiler.executable_filename(
         name, output_dir=test_compile_dir)
 
-    compiler.compile([source_file], extra_preargs=extra_preargs,
+    compiler.compile([source_file], output_dir=test_compile_dir, extra_preargs=extra_preargs,
                      include_dirs=include_dirs, macros=macros)
     compiler.link_executable(
         [object_file], execute_object_file, libraries=libraries, library_dirs=library_dirs)
+        
 
     return execute_object_file          
 
@@ -327,14 +340,14 @@ def get_common_options(build_ext):
                              'values are "", "MPI", "NCCL".' % gpu_allreduce)
 
     gpu_allgather = os.environ.get('HOROVOD_GPU_ALLGATHER')
-    if gpu_allgather and gpu_allgather != 'MPI':
+    if gpu_allgather and gpu_allgather != 'MPI' and gpu_allreduce != 'NCCL':
         raise DistutilsError('HOROVOD_GPU_ALLGATHER=%s is invalid, supported '
-                             'values are "", "MPI".' % gpu_allgather)
+                             'values are "", "MPI", "NCCL".' % gpu_allgather)
 
     gpu_broadcast = os.environ.get('HOROVOD_GPU_BROADCAST')
-    if gpu_broadcast and gpu_broadcast != 'MPI':
+    if gpu_broadcast and gpu_broadcast != 'MPI' and gpu_allreduce != 'NCCL':
         raise DistutilsError('HOROVOD_GPU_BROADCAST=%s is invalid, supported '
-                             'values are "", "MPI".' % gpu_broadcast)
+                             'values are "", "MPI", "NCCL".' % gpu_broadcast)
 
     if gpu_allreduce or gpu_allgather or gpu_broadcast:
         have_cuda = True
@@ -391,9 +404,12 @@ def get_common_options(build_ext):
 
 
 def build_common_extension(build_ext, options, abi_compile_flags):
+   
     common_mpi_lib.define_macros = options['MACROS']
     common_mpi_lib.include_dirs = options['INCLUDES']
     common_mpi_lib.sources = options['SOURCES'] + ['shouter/common/common.cc',
+                                                   'shouter/common/mpi_message.cc',
+                                                   'shouter/common/operations.cc',
                                                    'shouter/common/timeline.cc']
     common_mpi_lib.extra_compile_args = options['COMPILE_FLAGS'] + abi_compile_flags
     common_mpi_lib.extra_link_args = options['LINK_FLAGS']
@@ -424,46 +440,47 @@ def build_tf_extension(build_ext, options):
 
 
 def build_test_case(build_ext, options, abi_compile_flags):
-    '''
-    '''
-    check_seastar_version()
-    seastar_cxxflags, seastar_link_flags = get_seastar_flags(build_ext,options)
+    
+
+    
+    try_compile_run(build_ext, 'test_mem_align', 'test/test_mem_align.cc', libraries=None, include_dirs=None, library_dirs=None, macros=None,
+                 extra_preargs=None)
+
+    #check_seastar_version()
+    #seastar_cxxflags, seastar_link_flags = get_seastar_flags(build_ext,options)
 
 
 # run the customize_compiler
 class custom_build_ext(build_ext):
     def build_extensions(self):
+        # use nccl
+        os.environ['HOROVOD_GPU_ALLREDUCE']='NCCL'
+        os.environ['HOROVOD_GPU_ALLGATHER']='NCCL'
+        os.environ['HOROVOD_GPU_BROADCAST']='NCCL'
+        os.environ['CC']='/usr/bin/gcc-7'
+        os.environ['CXX']='/usr/bin/g++-7'
+        os.environ['LINK']='/usr/bin/g++-7'
+
+        cc_bin = os.environ.get('CC') 
+        if cc_bin:
+           self.compiler.compiler[0] = cc_bin
+        
+        cxx_bin = os.environ.get('CXX') 
+        if cxx_bin:
+           self.compiler.compiler_cxx[0] = cxx_bin
+           self.compiler.compiler_so[0]  = cxx_bin
+
+        link_bin = os.environ.get('LINK') 
+        if link_bin:
+           self.compiler.linker_exe[0] = link_bin
+           self.compiler.linker_so[0]  = link_bin
+    
         options = get_common_options(self)
+        options['INCLUDES'] += [get_current_dirs() + '/shouter']
         abi_compile_flags = build_tf_extension(self, options)
         build_common_extension(self, options, abi_compile_flags)
+
         build_test_case(self, options, abi_compile_flags)
-
-
-class BuildTestCommand(distutils.cmd.Command):
-    """A custom command to run Test on all Python source files."""
-
-    description = 'run Test on Python source files'
-    user_options = [
-        # The format is (long option, short option, description).
-        ('seastar_build=', None, 'path to seastar build directory'),
-    ]
-
-    def initialize_options(self):
-        """Set default values for options."""
-        # Each user option must be listed here with their default value.
-        self.seastar_build = ''
-
-    def finalize_options(self):
-        """Post-process options."""
-        if self.seastar_build:
-           assert os.path.exists(self.pylint_rcfile), (
-          'Pylint config file %s does not exist.' % self.pylint_rcfile)
-
-    def run(self):
-          
-    
-
-
 
 setup(name='shouter',
       version=__version__,
@@ -479,5 +496,5 @@ setup(name='shouter',
           'License :: OSI Approved :: Apache Software License'
       ],
       ext_modules=[common_mpi_lib, tensorflow_ops_lib],
-      cmdclass={'build_ext': custom_build_ext, 'build_test':BuildTestCommand},
+      cmdclass={'build_ext': custom_build_ext},
       zip_safe=False)

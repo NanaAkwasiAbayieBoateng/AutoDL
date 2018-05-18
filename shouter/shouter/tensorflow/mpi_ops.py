@@ -52,7 +52,7 @@ def _load_library(name, op_list=None):
     return library
 
 
-SHOUTER_LIB = _load_library('shouter_lib' + get_ext_suffix(),
+SHOUTER_LIB = _load_library('shouter_ops_lib' + get_ext_suffix(),
                         ['ShouterAllgather', 'ShouterAllreduce'])
 
 

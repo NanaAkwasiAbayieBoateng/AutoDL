@@ -92,6 +92,7 @@ def reduce_by_nccl(tensors_across_devices, use_mean=True):
       use_mean: Whether to take the mean of the tensors instead of a sum:
     Returns:
       A reduced tensor on the current device.
+    
     """
     if type(tensors_across_devices) != list:
          tensors_across_devices = list(tensors_across_devices)

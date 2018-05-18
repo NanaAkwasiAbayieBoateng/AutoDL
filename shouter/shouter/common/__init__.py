@@ -34,13 +34,13 @@ def get_ext_suffix():
 
 MPI_COMMON_LIB_CTYPES = \
     ctypes.CDLL(os.path.join(os.path.dirname(__file__),
-                             'mpi_lib' + get_ext_suffix()), mode=ctypes.RTLD_GLOBAL)
+                             'shouter_lib' + get_ext_suffix()), mode=ctypes.RTLD_GLOBAL)
 
 
 def init():
     """A function that initializes Horovod.
     """
-    return MPI_COMMON_LIB_CTYPES.horovod_init()
+    return MPI_COMMON_LIB_CTYPES.shouter_init()
 
 
 def size():
@@ -49,7 +49,7 @@ def size():
     Returns:
       An integer scalar containing the number of Horovod processes.
     """
-    size = MPI_COMMON_LIB_CTYPES.horovod_size()
+    size = MPI_COMMON_LIB_CTYPES.shouter_size()
     if size == -1:
         raise ValueError(
             'Horovod has not been initialized; use hvd.init().')
@@ -63,7 +63,7 @@ def local_size():
     Returns:
       An integer scalar containing the number of local Horovod processes.
     """
-    local_size = MPI_COMMON_LIB_CTYPES.horovod_local_size()
+    local_size = MPI_COMMON_LIB_CTYPES.shouter_local_size()
     if local_size == -1:
         raise ValueError(
             'Horovod has not been initialized; use hvd.init().')
@@ -76,7 +76,7 @@ def rank():
     Returns:
       An integer scalar with the Horovod rank of the calling process.
     """
-    rank = MPI_COMMON_LIB_CTYPES.horovod_rank()
+    rank = MPI_COMMON_LIB_CTYPES.shouter_rank()
     if rank == -1:
         raise ValueError(
             'Horovod has not been initialized; use hvd.init().')
@@ -91,7 +91,7 @@ def local_rank():
     Returns:
       An integer scalar with the local Horovod rank of the calling process.
     """
-    local_rank = MPI_COMMON_LIB_CTYPES.horovod_local_rank()
+    local_rank = MPI_COMMON_LIB_CTYPES.shouter_local_rank()
     if local_rank == -1:
         raise ValueError(
             'Horovod has not been initialized; use hvd.init().')
@@ -107,7 +107,7 @@ def mpi_threads_supported():
     Returns:
       A boolean value indicating whether MPI multi-threading is supported.
     """
-    mpi_threads_supported = MPI_COMMON_LIB_CTYPES.horovod_mpi_threads_supported()
+    mpi_threads_supported = MPI_COMMON_LIB_CTYPES.shouter_mpi_threads_supported()
     if mpi_threads_supported == -1:
         raise ValueError(
             'Horovod has not been initialized; use hvd.init().')

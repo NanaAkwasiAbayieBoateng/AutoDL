@@ -30,6 +30,11 @@
 # update seastear
 git submodule update --init --recursive
 
+# for apt update key errors:
+$ apt-get update && apt-get install -y apt-transport-https
+$ echo 'deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64 /' > /etc/apt/sources.list.d/cuda.list
+$ apt-get update
+
 ```
 
 ### grad variable sync strategy
