@@ -1,6 +1,3 @@
 [submodule "shouter/seastar"]
 	path = shouter/seastar
 	url = https://github.com/scylladb/seastar.git
-[submodule "shouter/pybind11"]
-	path = shouter/pybind11
-	url = https://github.com/pybind/pybind11.git

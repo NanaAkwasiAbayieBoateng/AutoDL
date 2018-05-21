@@ -7,8 +7,8 @@ SOURCE_DIR = .
 PYTHON ?= python3
 PYTHON_CONFIG ?= python3-config
 
-CXX ?= g++
-CC ?= gcc
+CXX = g++-7
+CC = gcc-7
 
 OPTFLAGS ?= -O3 -march=native
 
@@ -24,11 +24,13 @@ TF_LDFLAGS ?= $(shell $(PYTHON) -c 'import tensorflow as tf; print(" ".join(tf.s
 
 PYTHON_CXXFLAGS ?= $(shell $(PYTHON_CONFIG) --includes)
 PYTHON_LDFLAGS ?= $(shell $(PYTHON_CONFIG) --ldflags)
+CXXFLAGS += -I. $(PYTHON_CXXFLAGS)
+LDFLAGS  += -L. $(PYTHON_LDFLAGS)
 
 
 ## see pkg-config --cflags --libs $SEASTAR/build/release/seastar.pc
 LIBS = seastar
-LIBS_PATH = /home/tanguofu/workspace/AutoDL/shouter/seastar/build/release
+LIBS_PATH = /home/tanguofu/workspace/AutoDL/shouter/seastar/build/debug
 
 LIBS_CXXFLAGS = $(shell pkg-config --cflags $(LIBS_PATH)/$(LIBS).pc)
 LIBS_LDFLAGS = $(shell pkg-config --libs $(LIBS_PATH)/$(LIBS).pc)
@@ -54,7 +56,8 @@ DEPFILES = $(OBJS:.o=.d)
 EXT_SUFFIX ?= $(shell $(PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')
 
 TF_SO = $(BUILD_DIR)/zmq_pull_op$(EXT_SUFFIX)
-#PYBIND_SO = $(BUILD_DIR)/libzmqop$(EXT_SUFFIX)
+PYBIND_SO = $(BUILD_DIR)/example$(EXT_SUFFIX)
+CXXFLAGS += -I../pybind11/include/
 
 #ALL_SO = $(TF_SO) $(PYBIND_SO)
 
@@ -68,11 +71,11 @@ TF_SO = $(BUILD_DIR)/zmq_pull_op$(EXT_SUFFIX)
 #	@$(CXX) $^ -o $@ $(LDFLAGS) $(TF_LDFLAGS)
 #	@echo "done."
 
-all:$(TRAGETS) 
+all:$(PYBIND_SO) 
 
-$(PYBIND_SO): $(SOURCE_DIR)/%$(EXT_SUFFIX): $(BUILD_DIR)/%.o
+$(PYBIND_SO): $(SOURCE_DIR)/%$(EXT_SUFFIX): %.o
 	@echo "Linking $@ ..."
-	@$(CXX) $^ -o $@ $(LDFLAGS) $(PYTHON_LDFLAGS)
+	@$(CXX) -O3 -Wall -shared -std=c++11 -fPIC -I../pybind11/include `python3 -m pybind11 --includes` build/example.o -o $(PYBIND_SO)
 	@echo "done."
 
 build/%: build/%.o build/%.d 
@@ -81,7 +84,7 @@ build/%: build/%.o build/%.d
 	@echo "done."
 
 build/%.o: %.cc
-	@echo "[cc] $< ..."
+	@echo "$(CXX) -c $< -o $@ $(CXXFLAGS)"
 	@$(CXX) -c $< -o $@ $(CXXFLAGS)
 
 build/%.d: %.cc Makefile

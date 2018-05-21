@@ -78,7 +78,60 @@ def get_current_dirs():
     current_file = os.path.realpath(__file__)
     return '/'.join(current_file.split('/')[:-1])
 
+
+def get_pybind11_flags(build_ext, includes,  abi_compile_flags):
     
+    pybind11_dir = os.environ.get('PYBIND11_HOME')
+
+    if pybind11_dir:
+        pybind11_dir +='/include'
+    else:
+        try:
+            import pybind11
+            pybind11_dir = [pybind11.get_include()]
+        except Exception:
+            last_err = 'Unable found PYBIND11_HOME,please pip3 install pybind11 or set PYBIND11_HOME'
+            raise DistutilsPlatformError(last_err)
+
+        
+    last_err = None
+    cpp_flags = ['-I'+i for i in includes] + abi_compile_flags
+    try:
+        lib_file = test_compile(build_ext, 'test_cpp_flags', extra_preargs=cpp_flags,
+                     include_dirs=pybind11_dir, 
+                     code=textwrap.dedent('''\
+                    #include <pybind11/pybind11.h>
+                    
+                    namespace py = pybind11;
+                    
+                    int add(int i, int j) {
+                        return i + j;
+                    }
+                    
+                    PYBIND11_MODULE(example, m) {
+                        m.doc() = "pybind11 example plugin"; // optional module docstring
+                        m.def("add", &add, "A function which adds two numbers",
+                              py::arg("i"), py::arg("j"));
+                    }
+                    '''))
+        
+        lib_dir = os.path.dirname(lib_file)
+        if lib_dir not in sys.path:
+            sys.path.append(lib_dir)
+        
+        import example
+        example.add(1, 2)
+        
+        return pybind11_dir
+
+    except (CompileError, LinkError):
+            last_err = 'Unable to determine -I include flags to use with pybind11 (see error above).'
+    except Exception:
+            last_err = 'Unable to determine -I include flags to use with pybind11.  ' \
+                       'Last error:\n\n%s' % traceback.format_exc()
+
+    raise DistutilsPlatformError(last_err)
+
 
 def get_tf_include_dirs():
     import tensorflow as tf
@@ -218,7 +271,7 @@ def test_compile(build_ext, name, code, libraries=None, include_dirs=None, libra
 
     return shared_object_file
 
-def try_compile_run(build_ext, name, code_file, libraries=None, include_dirs=None, library_dirs=None, macros=None,
+def test_compile_run(build_ext, name, code_file, libraries=None, include_dirs=None, library_dirs=None, macros=None,
                  extra_preargs=None):
     
     test_compile_dir = os.path.join(build_ext.build_temp, 'test_compile')
@@ -404,7 +457,8 @@ def get_common_options(build_ext):
 
 
 def build_common_extension(build_ext, options, abi_compile_flags):
-   
+  
+
     common_mpi_lib.define_macros = options['MACROS']
     common_mpi_lib.include_dirs = options['INCLUDES']
     common_mpi_lib.sources = options['SOURCES'] + ['shouter/common/common.cc',
@@ -441,10 +495,22 @@ def build_tf_extension(build_ext, options):
 
 def build_test_case(build_ext, options, abi_compile_flags):
     
+    macros   = options['MACROS']
+    includes = options['INCLUDES']
+    extra_link_args =  options['LINK_FLAGS']
+    library_dirs = options['LIBRARY_DIRS']
+    libraries = options['LIBRARIES']
 
     
-    try_compile_run(build_ext, 'test_mem_align', 'test/test_mem_align.cc', libraries=None, include_dirs=None, library_dirs=None, macros=None,
-                 extra_preargs=None)
+    test_compile_run(build_ext, 'test_mem_align', 'test/test_mem_align.cc', libraries=libraries,
+                      include_dirs=includes, library_dirs=library_dirs, macros=None,
+                      extra_preargs=extra_link_args)
+    
+    code = open('test/example.cc','r').read()
+
+    libs = test_compile(build_ext, 'example', code, libraries=libraries, include_dirs=includes,
+                      library_dirs=library_dirs, macros=macros, extra_preargs=None)
+    print(libs)
 
     #check_seastar_version()
     #seastar_cxxflags, seastar_link_flags = get_seastar_flags(build_ext,options)
@@ -453,13 +519,15 @@ def build_test_case(build_ext, options, abi_compile_flags):
 # run the customize_compiler
 class custom_build_ext(build_ext):
     def build_extensions(self):
+        
+        #os.environ['PYBIND11_HOME'] = 'pybind11'
         # use nccl
         os.environ['HOROVOD_GPU_ALLREDUCE']='NCCL'
         os.environ['HOROVOD_GPU_ALLGATHER']='NCCL'
         os.environ['HOROVOD_GPU_BROADCAST']='NCCL'
         os.environ['CC']='/usr/bin/gcc-7'
         os.environ['CXX']='/usr/bin/g++-7'
-        os.environ['LINK']='/usr/bin/g++-7'
+        os.environ['LINK']='/usr/bin/g++-7'        
 
         cc_bin = os.environ.get('CC') 
         if cc_bin:
@@ -478,9 +546,14 @@ class custom_build_ext(build_ext):
         options = get_common_options(self)
         options['INCLUDES'] += [get_current_dirs() + '/shouter']
         abi_compile_flags = build_tf_extension(self, options)
-        build_common_extension(self, options, abi_compile_flags)
+        
+        # for invoke c++11 in python
+        pybind11_includes = get_pybind11_flags(self, options['INCLUDES'], abi_compile_flags)
+        options['INCLUDES'] += pybind11_includes
 
         build_test_case(self, options, abi_compile_flags)
+        build_common_extension(self, options, abi_compile_flags)
+
 
 setup(name='shouter',
       version=__version__,
