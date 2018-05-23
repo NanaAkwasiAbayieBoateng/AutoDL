@@ -22,11 +22,13 @@ import subprocess
 import sys
 import textwrap
 import traceback
+import sysconfig
 
 from shouter import __version__
 
 
-common_mpi_lib = Extension('shouter.common.shouter_lib', [])
+common_mpi_lib = Extension('shouter.common.coordinator', [])
+test_lib = Extension('test.example', [])
 tensorflow_ops_lib = Extension('shouter.tensorflow.shouter_ops_lib', [])
 
 
@@ -96,8 +98,9 @@ def get_pybind11_flags(build_ext, includes,  abi_compile_flags):
         
     last_err = None
     cpp_flags = ['-I'+i for i in includes] + abi_compile_flags
+
     try:
-        lib_file = test_compile(build_ext, 'test_cpp_flags', extra_preargs=cpp_flags,
+        lib_file = test_compile(build_ext, 'example', extra_preargs=cpp_flags,
                      include_dirs=pybind11_dir, 
                      code=textwrap.dedent('''\
                     #include <pybind11/pybind11.h>
@@ -116,11 +119,13 @@ def get_pybind11_flags(build_ext, includes,  abi_compile_flags):
                     '''))
         
         lib_dir = os.path.dirname(lib_file)
+
         if lib_dir not in sys.path:
             sys.path.append(lib_dir)
         
         import example
         example.add(1, 2)
+        sys.path.pop()
         
         return pybind11_dir
 
@@ -250,7 +255,9 @@ def get_mpi_flags():
 
 def test_compile(build_ext, name, code, libraries=None, include_dirs=None, library_dirs=None, macros=None,
                  extra_preargs=None):
-    test_compile_dir = os.path.join(build_ext.build_temp, 'test_compile')
+    #test_compile_dir = os.path.join(build_ext.build_temp, 'test_compile')
+    #
+    test_compile_dir = build_ext.build_temp + "/test"
     if not os.path.exists(test_compile_dir):
         os.makedirs(test_compile_dir)
 
@@ -259,10 +266,13 @@ def test_compile(build_ext, name, code, libraries=None, include_dirs=None, libra
         f.write(code)
 
     compiler = build_ext.compiler
+    suffix = sysconfig.get_config_var("EXT_SUFFIX")
 
     [object_file] = compiler.object_filenames([source_file])
-    shared_object_file = compiler.shared_object_filename(
-        name, output_dir=test_compile_dir)
+    
+    #shared_object_file = compiler.shared_object_filename(
+    #    name+suffix, output_dir=test_compile_dir)
+    shared_object_file = test_compile_dir +'/' + name + suffix
 
     compiler.compile([source_file], extra_preargs=extra_preargs,
                      include_dirs=include_dirs, macros=macros)
@@ -493,6 +503,19 @@ def build_tf_extension(build_ext, options):
 
 
 
+def build_test_extension(build_ext, options, abi_compile_flags):
+      
+
+    test_lib.define_macros = options['MACROS']
+    test_lib.include_dirs = options['INCLUDES']
+    test_lib.sources = options['SOURCES'] + ['test/example.cc']
+    test_lib.extra_compile_args = options['COMPILE_FLAGS'] + abi_compile_flags
+    test_lib.extra_link_args = options['LINK_FLAGS']
+    test_lib.library_dirs = options['LIBRARY_DIRS']
+    test_lib.libraries = options['LIBRARIES']
+
+    build_ext.build_extension(test_lib)
+
 def build_test_case(build_ext, options, abi_compile_flags):
     
     macros   = options['MACROS']
@@ -506,11 +529,11 @@ def build_test_case(build_ext, options, abi_compile_flags):
                       include_dirs=includes, library_dirs=library_dirs, macros=None,
                       extra_preargs=extra_link_args)
     
-    code = open('test/example.cc','r').read()
+    #code = open('test/example.cc','r').read()
 
-    libs = test_compile(build_ext, 'example', code, libraries=libraries, include_dirs=includes,
-                      library_dirs=library_dirs, macros=macros, extra_preargs=None)
-    print(libs)
+    #libs = test_compile(build_ext, 'example', code, libraries=libraries, include_dirs=includes,
+    #                  library_dirs=library_dirs, macros=macros, extra_preargs=None)
+    #print(libs)
 
     #check_seastar_version()
     #seastar_cxxflags, seastar_link_flags = get_seastar_flags(build_ext,options)
@@ -552,7 +575,9 @@ class custom_build_ext(build_ext):
         options['INCLUDES'] += pybind11_includes
 
         build_test_case(self, options, abi_compile_flags)
+
         build_common_extension(self, options, abi_compile_flags)
+        build_test_extension(self, options, abi_compile_flags)
 
 
 setup(name='shouter',
@@ -568,6 +593,6 @@ setup(name='shouter',
       classifiers=[
           'License :: OSI Approved :: Apache Software License'
       ],
-      ext_modules=[common_mpi_lib, tensorflow_ops_lib],
+      ext_modules=[common_mpi_lib, test_lib, tensorflow_ops_lib],
       cmdclass={'build_ext': custom_build_ext},
       zip_safe=False)

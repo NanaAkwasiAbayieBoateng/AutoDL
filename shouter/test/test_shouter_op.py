@@ -53,6 +53,9 @@ if __name__ == '__main__':
     lr  = tf.constant(0.1)
     opt = tf.train.MomentumOptimizer(lr,0.9)
 
+    global_step   = tf.train.get_or_create_global_step()
+    
+
     with tf.device('/GPU:0'):
         y,_ = model(x, class_num)
         loss = tf.losses.sparse_softmax_cross_entropy(logits=y, labels=z)
@@ -65,12 +68,16 @@ if __name__ == '__main__':
         loss = loss + l2loss
 
         gradvars = opt.compute_gradients(loss=loss, var_list=trainable_variable)
+        reduce_g = []
+        for g, v in gradvars:
+            reduceg = shouter._allreduce(g)
+            reduce_g.append((reduceg, v))
         
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        apply_ops = opt.apply_gradients(gradvars)
+        apply_ops = opt.apply_gradients(reduce_g)
     
 
-    global_step   = tf.train.get_or_create_global_step()
+    
     update_global = global_step.assign_add(1)
     train_op=[update_ops, apply_ops, global_step]
  
@@ -85,7 +92,7 @@ if __name__ == '__main__':
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
         #assign_global_variables(sess.graph)
-        dump_compute_operations(sess.graph.get_operations())
+        #dump_compute_operations(sess.graph.get_operations())
 
         yp = sess.run(train_op)
         #print(yp)

@@ -83,7 +83,10 @@ Status EnqueueTensorBroadcast(std::shared_ptr<OpContext> context,
                               const std::string name, const int device,
                               StatusCallback callback);
 
-} // namespace common
-} // namespace horovod
 
-#endif // HOROVOD_OPERATIONS_H
+
+
+} // namespace common
+} // namespace shouter
+
+#endif // SHOUTER_OPERATIONS_H

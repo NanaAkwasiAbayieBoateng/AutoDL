@@ -20,12 +20,74 @@ from __future__ import division
 from __future__ import print_function
 
 import re
+
+import tensorflow as tf
 from tensorflow.python.framework import load_library
 from tensorflow.python.framework import ops
 from tensorflow.python.platform import resource_loader
 
+
+#from shouter.common import coordinator
 from shouter.common import get_ext_suffix
 
+from enum import Enum
+
+#@unique
+class OpType(Enum):
+    REDUCE     = 1
+    ALL_REDUCE = 2
+    BROCAST    = 3
+    GARTHER    = 4
+    ALL_GARTHER= 5
+
+class OpsGraph:
+    """ keep and compute the variable dependency"""
+    
+    
+    # class member
+    class Variable:
+        def __init__(self, tensor, type, dst_ranks=[]):
+            self.tensor = tensor
+            self.type = type
+            #self.src_rank = coordinator.get_rank()
+            self.src_rank = 0
+            if type in [OpType.ALL_REDUCE, OpType.ALL_GARTHER]:
+                #self.dst_ranks = coordinator.get_allranks()
+                self.dst_ranks =[]
+            else:
+                self.dst_ranks = dst_ranks
+            
+            
+    # static member           
+    tensors = []
+
+    @classmethod
+    def add_allreduce(cls, tensor):
+        cls.tensors.append(OpsGraph.Variable(tensor, OpType.ALL_REDUCE))
+    
+    @classmethod
+    def add_reduce(cls, tensor, from_ranks=None):
+        cls.tensors.append(OpsGraph.Variable(tensor, OpType.REDUCE, dst_ranks=from_ranks))
+
+    @classmethod
+    def add_allgather(cls, tensor):
+        cls.tensors.append(OpsGraph.Variable(tensor, OpType.ALL_GARTHER))
+    
+    @classmethod
+    def add_broadcast(cls, tensor, from_ranks=None):
+        dst_ranks = from_ranks if from_ranks else coordinator.get_allranks()
+        cls.tensors.append(OpsGraph.Variable(tensor, OpType.REDUCE, dst_ranks=from_ranks))
+    @classmethod
+    def compute_tensorid(cls):
+        '''TODO: assign tensorid by session graph ops'''
+        coordinator.clear()
+
+        for i, v in enumerate(cls.tensors):
+            v.tensorid = i
+            coordinator.add_tensortable(i, v.name, v.shape.as_list(), v.type, )
+
+        
+        
 
 def _load_library(name, op_list=None):
     """Loads a .so file containing the specified operators.
@@ -61,7 +123,9 @@ def _normalize_name(name):
     return re.sub('[^a-zA-Z0-9_]', '_', name)
 
 
-def allreduce(tensor, name=None):
+
+
+def _allreduce(tensor, name=None):
     """An op which sums an input tensor over all the Shouter processes.
 
     The reduction operation is keyed by the name of the op. The tensor type and
@@ -70,14 +134,19 @@ def allreduce(tensor, name=None):
 
     Returns:
       A tensor of the same shape and type as `tensor`, summed across all
-      processes.
-    
+      processes.   
     
     """
     if name is None:
         name = 'ShouterAllreduce_%s' % _normalize_name(tensor.name)
     
-    return SHOUTER_LIB.Shouter_allreduce(tensor, name=name)
+    global_step = tf.train.get_global_step()
+    if not global_step:
+        raise NotFoundError("Not found global_step")
+    
+    OpsGraph.add_allreduce(tensor)
+    return SHOUTER_LIB.shouter_allreduce(tensor, global_step, name=name)
+
 ops.NotDifferentiable('ShouterAllreduce')
 
 
@@ -97,7 +166,11 @@ def allgather(tensor, name=None):
     """
     if name is None:
         name = 'ShouterAllgather_%s' % _normalize_name(tensor.name)
-    return SHOUTER_LIB.Shouter_allgather(tensor, name=name)
+
+    OpsGraph.add_allgather(tensor)
+    global_step = tf.train.get_global_step()
+    return SHOUTER_LIB.shouter_allgather(tensor, global_step, name=name)
+
 ops.NotDifferentiable('ShouterAllgather')
 
 def broadcast(tensor, root_rank, name=None):
@@ -114,5 +187,9 @@ def broadcast(tensor, root_rank, name=None):
     """
     if name is None:
         name = 'ShouterBroadcast_%s' % _normalize_name(tensor.name)
-    return SHOUTER_LIB.Shouter_broadcast(tensor, name=name, root_rank=root_rank)
+    OpsGraph.add_broadcast(tensor)
+
+    global_step = tf.train.get_global_step()
+    return SHOUTER_LIB.shouter_broadcast(tensor, global_step, name=name, root_rank=root_rank)
+
 ops.NotDifferentiable('ShouterBroadcast')

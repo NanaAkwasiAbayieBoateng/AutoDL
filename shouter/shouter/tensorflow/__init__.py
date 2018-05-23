@@ -33,8 +33,45 @@ from shouter.common import mpi_threads_supported
 
 from shouter.tensorflow.mpi_ops import allgather
 from shouter.tensorflow.mpi_ops import broadcast
-from shouter.tensorflow.mpi_ops import allreduce
+from shouter.tensorflow.mpi_ops import _allreduce
+from shouter.tensorflow.mpi_ops import OpsGraph
 
+
+def allreduce(tensor, average=True, device_dense='', device_sparse=''):
+    """Perform an allreduce on a tf.Tensor or tf.IndexedSlices.
+    Arguments:
+        tensor: tf.Tensor, tf.Variable, or tf.IndexedSlices to reduce.
+        The shape of the input must be identical across all ranks.
+        average: If True, computes the average over all ranks.
+                 Otherwise, computes the sum over all ranks.
+        device_dense: Device to be used for dense tensors. Uses GPU by default
+                      if Horovod was build with HOROVOD_GPU_ALLREDUCE.
+        device_sparse: Device to be used for sparse tensors. Uses GPU by default
+                       if Horovod was build with HOROVOD_GPU_ALLGATHER.
+    This function performs a bandwidth-optimal ring allreduce on the input
+    tensor. If the input is an tf.IndexedSlices, the function instead does an
+    allgather on the values and the indices, effectively doing an allreduce on
+    the represented tensor.
+    """
+    if isinstance(tensor, tf.IndexedSlices):
+        with tf.device(device_sparse):
+            # For IndexedSlices, do two allgathers intead of an allreduce.
+            horovod_size = tf.cast(size(), tensor.values.dtype)
+            values = allgather(tensor.values)
+            indices = allgather(tensor.indices)
+
+            # To make this operation into an average, divide all gathered values by
+            # the Horovod size.
+            new_values = tf.div(values, horovod_size) if average else values
+        return tf.IndexedSlices(new_values, indices,
+                                dense_shape=tensor.dense_shape)
+    else:
+        with tf.device(device_dense):
+            horovod_size = tf.cast(size(), tensor.dtype)
+            summed_tensor = _allreduce(tensor)
+            new_tensor = (tf.div(summed_tensor, horovod_size)
+                          if average else summed_tensor)
+        return new_tensor
 
 
 
@@ -90,7 +127,7 @@ class DistributedOptimizer(tf.train.Optimizer):
     """An optimizer that wraps another tf.Optimizer, using an allreduce to
     average gradient values before applying gradients to model weights."""
 
-    def __init__(self, optimizer, name=None, use_locking=False, device_dense='',
+    def __init__(self, optimizer, name=None, workers=[], use_locking=False, device_dense='',
                  device_sparse=''):
         """Construct a new DistributedOptimizer, which uses another optimizer
         under the hood for computing single-process gradient values and
@@ -116,6 +153,8 @@ class DistributedOptimizer(tf.train.Optimizer):
         """
         if name is None:
             name = "Distributed{}".format(type(optimizer).__name__)
+        
+        
 
         self._optimizer = optimizer
         self._device_dense = device_dense
@@ -146,6 +185,12 @@ class DistributedOptimizer(tf.train.Optimizer):
             return averaged_gradients
         else:
             return gradients
+    
+    def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+        
+        OpsGraph.compute_tensorid()
+        # raise tf.errors.InvalidArgumentError?
+        return self.apply_gradients(grads_and_vars, global_step, name)
 
     def _apply_dense(self, *args, **kwargs):
         """Calls this same method on the underlying optimizer."""

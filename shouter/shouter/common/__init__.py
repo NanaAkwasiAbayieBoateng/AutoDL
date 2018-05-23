@@ -114,12 +114,5 @@ def mpi_threads_supported():
     return bool(mpi_threads_supported)
 
 
-# now the tensorid table 
-class TensorMetaTable:
-    # class member
-    tensor_meta = []
 
-    @classmethod
-    def add(cls, tensor):
-        cls.tensor_meta.append(tensor)
     

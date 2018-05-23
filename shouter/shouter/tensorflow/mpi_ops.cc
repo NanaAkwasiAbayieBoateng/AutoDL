@@ -279,6 +279,11 @@ TFReadyEvent* RecordReadyEvent(OpKernelContext* context) {
 
 } // namespace
 
+
+#define VVLOG(lvl) if (TF_PREDICT_FALSE(VLOG_IS_ON(lvl))) \
+     ::tensorflow::internal::LogMessage(__FILE__, __LINE__, ::tensorflow::INFO)
+
+
 class ShouterAllreduceOp : public AsyncOpKernel {
 public:
   explicit ShouterAllreduceOp(OpKernelConstruction* context)
@@ -291,9 +296,19 @@ public:
     auto node_name = name();
     auto device = GetDeviceID(context);
     auto tensor = context->input(0);
+    auto step   = context->input(1);
+
+
+    VVLOG(0) << node_name <<", shape:"<< tensor.shape()<<", dtype:"<<tensor.dtype() 
+            <<", size:"<< (int64_t)tensor.tensor_data().size() 
+            << ",step:"<< step.flat<int64>()(0)<< std::endl;
+
     Tensor* output;
     OP_REQUIRES_OK_ASYNC(
         context, context->allocate_output(0, tensor.shape(), &output), done);
+    
+    /*
+
     // ReadyEvent makes sure input tensor is ready, and output is allocated.
     auto ready_event = std::shared_ptr<TFReadyEvent>(RecordReadyEvent(context));
     auto hvd_context = std::make_shared<TFOpContext>(context);
@@ -305,7 +320,13 @@ public:
           context->SetStatus(ConvertStatus(status));
           done();
         });
-    OP_REQUIRES_OK_ASYNC(context, ConvertStatus(enqueue_result), done);
+    */
+    
+    OP_REQUIRES_OK_ASYNC(context, ConvertStatus(common::Status::OK()), done);
+    
+    // copy 
+    output->CopyFrom(tensor, tensor.shape());
+    done();
   }
 };
 
@@ -319,6 +340,7 @@ REGISTER_KERNEL_BUILDER(Name("ShouterAllreduce").Device(DEVICE_GPU),
 REGISTER_OP("ShouterAllreduce")
     .Attr("T: {int32, int64, float32, float64}")
     .Input("tensor: T")
+    .Input("step: int64")
     .Output("sum: T")
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       c->set_output(0, c->input(0));
@@ -332,7 +354,8 @@ allreduce.
 
 Arguments
     tensor:     A tensor to reduce.
-
+    step: The global step when train
+ 
 Output
     sum:    A tensor with the same shape as `tensor`, summed across all MPI processes.
 )doc");

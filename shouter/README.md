@@ -72,17 +72,18 @@ TFOP ->|
 # global: TensorTable, topological structure(Ring/P2P/Fattree)
 
     Node A                                              Node B         
-TF Operation   ------(allreduce, brocast)------->    TF Operation  
-        |                                                 |                    
-        V                                                 V
-  coordinator - channel(step,rank,Tensor(id)------>  coordinator
-        |                                                 |  
-        |             [SeaStarTcpProxy]                   |   
-        v                                                 V   
+  TF Operation   ------(allreduce, brocast)------->    TF Operation  
+        |                                                 ^                    
+        V                                                 |
+  coordinator  -channel(step,rank,Tensor(id)------>  coordinator
+        |                                                 ^  
+        |                                                 |   
+        v                                                 |   
 　   Proxy -write->Message(step,TensorID,buffer)-read->  proxy
-        |            [SeaStarTcpChannel]                  |      
-        V                                                 v
+        |              [SeaStarTcpProxy]                  ^      
+        V                                                 |
    send_connection  -send-> (buffer, size)-> recv--  recv_connection
+                     [SeaStarTcpChannel]
 
 ```
 - Tensor Meta : As all tensor are fixed at start train, so each node has a tensortable, then tensor message just set a id

@@ -12,6 +12,9 @@
                 "/usr/include/",
                 "/usr/local/cuda-9.0/targets/x86_64-linux/include",
                 "/usr/local/lib/python3.5/dist-packages/tensorflow/include",
+                "/home/tanguofu/workspace/AutoDL/shouter/shouter",
+                "${fileDirname}",
+                "${fileDirname}/../",
                 "${workspaceFolder}",
                 "${workspaceFolder}/shouter/shouter"
             ],

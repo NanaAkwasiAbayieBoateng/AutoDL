@@ -93,7 +93,7 @@ def update_param(pipe):
     return param
 
 def main(argv):
-    pipe  = pipeline.Pipeline()
+    pipe  = multipipeline.Pipeline()
 
     # 1. config load, as hypter params should define in yaml config
     param = update_param(pipe) 

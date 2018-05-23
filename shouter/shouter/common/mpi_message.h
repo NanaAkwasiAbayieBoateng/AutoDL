@@ -67,7 +67,7 @@ struct __attribute__((packed)) TensorMessageNode{
 static constexpr size_t TensorMessageLen = sizeof(TensorMessage);
 static constexpr size_t TensorMessageNodeLen = sizeof(TensorMessageNode);
 
-#define SetTensorMessageMagic(m)            (m->magic = 0x12f0c8d)
+#define SetTensorMessageMagic(m)    (m->magic = 0x12f0c8d)
 #define CheckTensorMessageMagic(m)  (m->magic == 0x12f0c8d)
 
 // just a helper function, call every thread

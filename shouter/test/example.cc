@@ -1,4 +1,6 @@
 #include <pybind11/pybind11.h>
+#include <memory>
+#include <vector>
 
 namespace py = pybind11;
 
@@ -7,15 +9,21 @@ int add(int i, int j) {
 }
 
 struct Pet {
+public:
     Pet(const std::string &name) : name(name) { }
     void setName(const std::string &name_) { name = name_; }
     const std::string &getName() const { return name; }
+    
+    int setVec(const std::vector<std::string>& vec){
+        return 0;
+    }
 
     std::string name;
 };
 
 struct Dog : Pet {
     Dog(const std::string &name) : Pet(name) { }
+    Dog(std::shared_ptr<Pet> sp) : Pet(sp->getName()) { }
     std::string bark() const { return "woof!"; }
 };
 
@@ -33,6 +41,7 @@ PYBIND11_MODULE(example, m) {
     .def_readwrite("name", &Pet::name)
     .def("setName", &Pet::setName)
     .def("getName", &Pet::getName)
+    .def("setVec", &Pet::setVec)
     .def("__repr__",
         [](const Pet &a) {
             return "<example.Pet named '" + a.name + "'>";
