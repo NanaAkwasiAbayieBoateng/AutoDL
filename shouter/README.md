@@ -115,7 +115,7 @@ sudo apt-get install gcc-7 g++-7
 git submodule init 
 git submodule --update --recursive git submodule update --recursive
 
-./configure.py --compiler=/usr/bin/g++-7 --c-compiler=/usr/bin/gcc-7  --pie --cflags="-fPIC -D_GLIBCXX_USE_CXX11_ABI=0" --mode debug --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++17
+./configure.py --compiler=/usr/bin/g++-7 --c-compiler=/usr/bin/gcc-7  --pie --cflags="-fPIC -D_GLIBCXX_USE_CXX11_ABI=0"  --enable-dpdk  --static-boost  --enable-hwloc --c++-dialect=gnu++17 --mode=release
 ```
 - Features
  - smp::submit_to(cpu, lambda)

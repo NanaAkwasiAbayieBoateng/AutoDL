@@ -5,6 +5,8 @@
 #include <iostream>
 #include <future>
 #include <thread>
+#include <vector>
+
 
 #include "common/common.h"
 #include "common/mpi_message.h"
@@ -12,69 +14,43 @@
 
 using namespace shouter::common;
 
-namespace shouter{
+// class Proxy
 
-enum OpType{
-    REDUCE     = 1,
-    ALL_REDUCE = 2,
-    BROCAST    = 3,
-    GARTHER    = 4,
-    ALL_GARTHER= 5,
-};
 
-// implement tensor sync
+// implement a interface, for python invoke
 class Coordicater {
 
 public:
-    Coordicater(const std::vector<std::string>& workers, int port);
+    int generate_ring(const std::vector<std::string>& addrs, int local_port);
 
+    
     int rank();
+
+    const std::string addr();
 
     int size();
    
-    int register_tensor();
 
-    int brocast(uint32_t step, std::string& name, std::vector<int> ranks);
-    int reduce(uint32_t step, std::string& name, std::vector<int> ranks);
 
-    int allreduce(uint32_t step, std::string& name);
-    int allbrocast(uint32_t step, std::string& name);
+    int alloc_brocast(int rank, std::string& name, int size,  int dtype);
+    int alloc_reduce(int rank, std::string& name, int size,  int dtype);
+    int alloc_allreduce(std::string& name, int size,  int dtype);
 
-    int run();
+    // TODO
+    int alloc_gather(int rank, std::string& name, std::vector<int> shape, int dtype);
+    int alloc_scatter(int rank, std::string& name, std::vector<int> shape, int dtype);
 
-private:
+    // in tensor operation
+    int start_brocast(uint32_t step, std::string& name, char* buffer, std::function<(int)> done);
+    int start_reduce(uint32_t step, std::string& name, char* buffer, std::function<(int)> done);
+    int start_reduce(uint32_t step, std::string& name, char* buffer, std::function<(int)> done);
 
-   TensorTable _global_tensor_table;
-   
-   Proxy _proxy;   
+    int set_log_printer(std::function<std::basic_ostringstream<char>&()> printer); 
 };
-}
+
+}//  namespace shouter
 
 
-PYBIND11_MODULE(shouter, m) {
-    m.doc() ='''shouter is using Seastar & DPDK or RMDA communication libs, 
-                unlike nccl, gloo, mpi shouter only focus sync-mSGD DL train,
-                sync with in global_step and keep the inference order'''
-    
-    py::class_<Coordicater>(m, "Coordicater")
-    .def(py::init<const std::vector<std::string>&, int>())
-    .def("rank", &Coordicater::Coordicater) 
-    .def("size", &Pet::size)
-    .def("__repr__",
-        [](const Pet &a) {
-            return "<shouter.Coordicater >";
-        }
-    );
 
-
-    py::enum_<OpType>(m, "OpType")
-    .value("REDUCE", OpType::REDUCE)
-    .value("ALL_REDUCE", OpType::ALL_REDUCE)
-    .value("BROCAST", OpType::BROCAST)
-    .value("GARTHER", OpType::GARTHER)
-    .value("ALL_GARTHER", OpType::ALL_GARTHER)
-    .export_values();
-
-}
 
 #endif

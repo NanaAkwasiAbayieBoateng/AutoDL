@@ -1,13 +1,13 @@
-#ifndef SHOUTER_OPERATIONS_H
-#define SHOUTER_OPERATIONS_H
+#ifndef SHOUTER_PROXY_H
+#define SHOUTER_PROXY_H
 
 #include <stdint.h>
 #include <iostream>
 #include <future>
 #include <thread>
 
-#include "mpi_message.h"
-#include "channel.h"
+#include "common/mpi_message.h"
+#include "common/channel.h"
 
 namespace shouter{
 
@@ -25,7 +25,7 @@ class Proxy {
 
 public:
    // listen the port and start  parallel threads
-   static std::shared_ptr<Proxy> create_proxy(ChannelLinkType type, 
+   static int create_proxy(ChannelLinkType type, 
                                  const std::vector<std::string>& ips, int port, int parallel, ChannelHandler&& handler);
    // manager channel 
    virtual std::shared_ptr<Channel> get_channel(uint8_t id);  

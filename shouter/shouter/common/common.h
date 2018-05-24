@@ -95,19 +95,6 @@ public:
   virtual ~Tensor(){};
 };
 
-// every model variable is finalize
-class TensorTable {
-public:
-  
-  virtual int register_tensor(const Tensor* tensor);
-  virtual int size();
-
-  virtual int compute_topo();
-
-  virtual Tensor* operator[](int id);
-  virtual Tensor* operator[](const std::string& name);
-};
-
 class OpContext {
 public:
   // These allocators are fully synchronous, unlike TensorFlow counterparts.

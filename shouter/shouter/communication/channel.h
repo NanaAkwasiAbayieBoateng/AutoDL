@@ -11,18 +11,6 @@
 namespace shouter{
 
 
-// A channcel is interface for data stream transmission
-// As i prefer libco, not future or promise but for tcp stack, seastar is hard to refuse.
-class ChannelHandler {
-public:
-    ennum Status{HEAD,BODY,ERROR}
-    
-    // return 
-    virtual int on_msg_header(char* header);
-
-    virtual int on_msg_body(char* body);
-
-};
 
 class Channel {
 public:
@@ -34,9 +22,9 @@ public:
    ChannelStatus status(){return _status;}
 
    
-   virtual future<> write(Tensor T); 
+   virtual future<int> send(Tensor T); 
 
-   virtual future<TensorMsgBody> read(Tensor T);
+   virtual future<int> read(Tensor T);
 
 };
 

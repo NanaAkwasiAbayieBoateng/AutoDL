@@ -57,13 +57,13 @@ EXT_SUFFIX ?= $(shell $(PYTHON) -c 'import sysconfig; print(sysconfig.get_config
 
 TF_SO = $(BUILD_DIR)/zmq_pull_op$(EXT_SUFFIX)
 PYBIND_SO = $(BUILD_DIR)/example$(EXT_SUFFIX)
-CXXFLAGS += -I../pybind11/include/
+CXXFLAGS += $(shell $(PYTHON) -c 'import pybind11; print("-I" + pybind11.get_include())')
 
 #ALL_SO = $(TF_SO) $(PYBIND_SO)
 
 
 
-.PHONY: all
+.PHONY: all 
 #all: $(ALL_SO)
 
 #$(TF_SO): $(SOURCE_DIR)/%$(EXT_SUFFIX): $(BUILD_DIR)/%.o
@@ -71,7 +71,7 @@ CXXFLAGS += -I../pybind11/include/
 #	@$(CXX) $^ -o $@ $(LDFLAGS) $(TF_LDFLAGS)
 #	@echo "done."
 
-all:$(PYBIND_SO) 
+all:$(PYBIND_SO) $(TRAGETS)
 
 $(PYBIND_SO): $(SOURCE_DIR)/%$(EXT_SUFFIX): %.o
 	@echo "Linking $@ ..."

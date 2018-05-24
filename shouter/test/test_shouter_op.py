@@ -53,8 +53,8 @@ if __name__ == '__main__':
     lr  = tf.constant(0.1)
     opt = tf.train.MomentumOptimizer(lr,0.9)
 
-    global_step   = tf.train.get_or_create_global_step()
-    
+    with tf.device('/CPU:0'):
+        global_step   = tf.train.get_or_create_global_step()  
 
     with tf.device('/GPU:0'):
         y,_ = model(x, class_num)
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
     
     update_global = global_step.assign_add(1)
-    train_op=[update_ops, apply_ops, global_step]
+    train_op=[update_ops, apply_ops, update_global]
  
     
     print(global_step)
@@ -94,6 +94,8 @@ if __name__ == '__main__':
         #assign_global_variables(sess.graph)
         #dump_compute_operations(sess.graph.get_operations())
 
+        yp = sess.run(train_op)
+        yp = sess.run(train_op)
         yp = sess.run(train_op)
         #print(yp)
  
