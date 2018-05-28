@@ -27,17 +27,15 @@ enum OpType{
     ALL_GARTHER= 5,
 };
 
-class 
-
 class RankTensor {
 public:
    int id;
    std::string name;
    int size;
-
-   int rank;
-   std::vector<char*> rankbuffer;
-   char* buffer;
+   int rank;                                                                                                                                                                                                                                                                                                                            
+   
+   // store the buffer data 
+   char* msg_buffer;
 };
 
 // MetaData is global date
@@ -48,9 +46,9 @@ public:
     // from 0 to  ALLRANK  
     int rank;
     int size;
-    std::string localaddr;
     int port;
 
+    std::string localaddr;
     std::vector<std::string> workers;
     std::vector<int> others;
 

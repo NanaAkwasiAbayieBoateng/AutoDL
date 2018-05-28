@@ -30,7 +30,7 @@ LDFLAGS  += -L. $(PYTHON_LDFLAGS)
 
 ## see pkg-config --cflags --libs $SEASTAR/build/release/seastar.pc
 LIBS = seastar
-LIBS_PATH = /home/tanguofu/workspace/AutoDL/shouter/seastar/build/debug
+LIBS_PATH = /home/tanguofu/workspace/AutoDL/shouter/seastar/build/release
 
 LIBS_CXXFLAGS = $(shell pkg-config --cflags $(LIBS_PATH)/$(LIBS).pc)
 LIBS_LDFLAGS = $(shell pkg-config --libs $(LIBS_PATH)/$(LIBS).pc)
