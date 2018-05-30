@@ -189,6 +189,10 @@ int main(int ac, char** av) {
     return app.run_deprecated(ac, av, [&] {
         engine().at_exit([&] { return shard_echo_server.stop(); });
 
+        using namespace std::chrono_literals;
+        seastar::sleep(100ms).get();
+
+
         auto&& config = app.configuration();
         uint16_t port = config["port"].as<uint16_t>();
         return shard_echo_server.start(port).then([&] {
