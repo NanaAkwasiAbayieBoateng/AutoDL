@@ -11,6 +11,14 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
 
+from tensorflow.python.client import timeline
+from tensorflow.python.platform import gfile
+
+from tensorflow.core.protobuf import config_pb2
+from tensorflow.python.training import training_util
+from tensorflow.python.training.session_run_hook import SessionRunArgs
+from tensorflow.python.training.summary_io import SummaryWriterCache
+
 from device_manager import gpu
 
 
@@ -18,6 +26,7 @@ class TrainStateHook(session_run_hook.SessionRunHook):
     '''
     Loger train state
     '''
+
     def __init__(self, param, lr, total_loss, metrics, every_steps=100):
 
         self.minbatch = param.minibatch
@@ -63,13 +72,14 @@ class TrainStateHook(session_run_hook.SessionRunHook):
         if global_step < (self._last_steps + self.every_steps):
             return
 
-        elapsed_time  = time.time() - self._last_time
+        elapsed_time = time.time() - self._last_time
         elapsed_steps = global_step - self._last_steps
         #updater
-        self._last_time, self._last_steps =  time.time(), global_step
+        self._last_time, self._last_steps = time.time(), global_step
 
-        results['self_steps_per_sec']  = elapsed_steps / elapsed_time
-        results['self_sample_per_sec'] = results['self_steps_per_sec'] * self.minbatch
+        results['self_steps_per_sec'] = elapsed_steps / elapsed_time
+        results[
+            'self_sample_per_sec'] = results['self_steps_per_sec'] * self.minbatch
 
         self.logging(results)
 
@@ -80,21 +90,30 @@ class TrainStateHook(session_run_hook.SessionRunHook):
         lr = results['self_lr']
         total_loss = results['self_total_loss']
 
-        formats_str= '''global_step:{step}, steps/sec:{avg:.2f}, samples/sec:{sample:.2f}, total_loss:{total_loss:.2f}, lr:{lr}'''
-        formats_str= formats_str.format(step=global_step, avg=steps_per_sec, sample=sample_per_sec, total_loss=total_loss, lr=lr)
+        formats_str = '''global_step:{step}, steps/sec:{avg:.2f}, samples/sec:{sample:.2f}, total_loss:{total_loss:.2f}, lr:{lr}'''
+        formats_str = formats_str.format(
+            step=global_step,
+            avg=steps_per_sec,
+            sample=sample_per_sec,
+            total_loss=total_loss,
+            lr=lr)
 
-        metrics = [" %s:%s" %(k,v) for k,v in results.items() if not k.startswith('self_')]
+        metrics = [
+            " %s:%s" % (k, v) for k, v in results.items()
+            if not k.startswith('self_')
+        ]
 
         tf.logging.info(formats_str + ",".join(metrics))
 
-class SaverHook(tf.train.SessionRunHook):
 
+class SaverHook(tf.train.SessionRunHook):
     def __init__(self,
-                checkpoint_dir,
-                save_every_n_steps,
-                max_to_keep=100,
-                saver=None):
-        self._saver = saver if saver is not None else tf.train.Saver(max_to_keep=max_to_keep)
+                 checkpoint_dir,
+                 save_every_n_steps,
+                 max_to_keep=100,
+                 saver=None):
+        self._saver = saver if saver is not None else tf.train.Saver(
+            max_to_keep=max_to_keep)
         self._save_path = os.path.join(checkpoint_dir, "model.ckpt")
         self._save_every_n_steps = save_every_n_steps
 
@@ -107,11 +126,141 @@ class SaverHook(tf.train.SessionRunHook):
     def after_run(self, run_context, run_values):
         step = run_values.results[0]
         if step != 0 and step % self._save_every_n_steps == 0:
-            self._saver.save(run_context.session, self._save_path,
-                             global_step=step, write_meta_graph=False)
-            logging.info('{0} Save checkpoint at {1}'.format(datetime.now(), step))
+            self._saver.save(
+                run_context.session,
+                self._save_path,
+                global_step=step,
+                write_meta_graph=False)
+            logging.info('{0} Save checkpoint at {1}'.format(
+                datetime.now(), step))
 
     def end(self, session):
         step = session.run(tf.train.get_global_step())
-        self._saver.save(session, self._save_path,
-                             global_step=step, write_meta_graph=False)
+        self._saver.save(
+            session, self._save_path, global_step=step, write_meta_graph=False)
+
+
+class SaverHook(tf.train.SessionRunHook):
+    '''
+    dump the variable of model
+    https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/profiler/g3doc/command_line.md
+    '''
+
+    def __init__(self,
+                 checkpoint_dir,
+                 save_every_n_steps,
+                 max_to_keep=100,
+                 saver=None):
+        self._saver = saver if saver is not None else tf.train.Saver(
+            max_to_keep=max_to_keep)
+        self._save_path = os.path.join(checkpoint_dir, "model.ckpt")
+        self._save_every_n_steps = save_every_n_steps
+
+    def begin(self):
+        self._g_step = tf.train.get_global_step()
+
+    def before_run(self, run_context):  # pylint: disable=unused-argument
+        return tf.train.SessionRunArgs([self._g_step])
+
+    def after_run(self, run_context, run_values):
+        step = run_values.results[0]
+        if step != 0 and step % self._save_every_n_steps == 0:
+            self._saver.save(
+                run_context.session,
+                self._save_path,
+                global_step=step,
+                write_meta_graph=False)
+            logging.info('{0} Save checkpoint at {1}'.format(
+                datetime.now(), step))
+
+    def end(self, session):
+        step = session.run(tf.train.get_global_step())
+        self._saver.save(
+            session, self._save_path, global_step=step, write_meta_graph=False)
+
+
+
+class ProfilerHook(tf.train.SessionRunHook):
+    """
+    copy from https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py
+    Captures CPU/GPU profiling information every N steps or seconds.
+    This produces files called "timeline-<step>.json", which are in Chrome
+    Trace format.
+    For more information see:
+    https://github.com/catapult-project/catapult/blob/master/tracing/README.md
+    """
+
+    def __init__(self,
+                 save_steps=None,
+                 save_secs=None,
+                 output_dir="",
+                 show_dataflow=True,
+                 show_memory=False):
+        """Initializes a hook that takes periodic profiling snapshots.
+    `options.run_metadata` argument of `tf.Session.Run` is used to collect
+    metadata about execution. This hook sets the metadata and dumps it in Chrome
+    Trace format.
+    Args:
+      save_steps: `int`, save profile traces every N steps. Exactly one of
+          `save_secs` and `save_steps` should be set.
+      save_secs: `int` or `float`, save profile traces every N seconds.
+      output_dir: `string`, the directory to save the profile traces to.
+          Defaults to the current directory.
+      show_dataflow: `bool`, if True, add flow events to the trace connecting
+          producers and consumers of tensors.
+      show_memory: `bool`, if True, add object snapshot events to the trace
+          showing the sizes and lifetimes of tensors.
+    """
+        self._output_file = os.path.join(output_dir, "timeline-{}.json")
+        self._file_writer = SummaryWriterCache.get(output_dir)
+        self._show_dataflow = show_dataflow
+        self._show_memory = show_memory
+        self._timer = tf.train.SecondOrStepTimer(
+            every_secs=save_secs, every_steps=save_steps)
+
+    def begin(self):
+        self._next_step = None
+        self._global_step_tensor = training_util._get_or_create_global_step_read(
+        )  # pylint: disable=protected-access
+        if self._global_step_tensor is None:
+            raise RuntimeError(
+                "Global step should be created to use ProfilerHook.")
+
+    def before_run(self, run_context):
+        self._request_summary = (self._next_step is None
+                                 or self._timer.should_trigger_for_step(
+                                     self._next_step))
+        requests = {"global_step": self._global_step_tensor}
+        opts = (
+            config_pb2.RunOptions(trace_level=config_pb2.RunOptions.FULL_TRACE)
+            if self._request_summary else None)
+
+        return SessionRunArgs(requests, options=opts)
+
+    def after_run(self, run_context, run_values):
+        stale_global_step = run_values.results["global_step"]
+        global_step = stale_global_step + 1
+        if self._request_summary:
+            global_step = run_context.session.run(self._global_step_tensor)
+            self._timer.update_last_triggered_step(global_step)
+            self._save(global_step, self._output_file.format(global_step),
+                       run_values.run_metadata.step_stats)
+            self._file_writer.add_run_metadata(run_values.run_metadata,
+                                               "step_%d" % global_step)
+
+        self._next_step = global_step + 1
+
+    def _save(self, step, save_path, step_stats):
+        logging.info("Saving timeline for %d into '%s'.", step, save_path)
+        with gfile.Open(save_path, "w") as f:
+            trace = timeline.Timeline(step_stats)
+            f.write(
+                trace.generate_chrome_trace_format(
+                    show_dataflow=self._show_dataflow,
+                    show_memory=self._show_memory))
+
+
+class EvaluateHook(tf.train.SessionRunHook):
+    '''
+    test share model ?
+    '''

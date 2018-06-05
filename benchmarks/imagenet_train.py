@@ -105,7 +105,9 @@ def main(argv):
     config.gpu_options.allow_growth = True
     #config.gpu_options.per_process_gpu_memory_fraction = 0.4
 
-
+    #scaffold use restore variable
+    scaffold =  
+     
     # start train loop
     with tf.train.MonitoredTrainingSession(hooks=hooks,
                                            config=config) as mon_sess:

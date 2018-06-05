@@ -24,7 +24,7 @@ from data_set      import cifar10_dataset
 from model         import official_model
 from learning_rate import PiecewiseLR
 from pipeline      import multipipeline
-
+from initialize    import InitScaffold
 import train_hook
 
 '''
@@ -43,7 +43,7 @@ setup:
         ldconfig && \
    
     3. install horovod
-        HOROVOD_GPU_ALLREDUCE=NCCL pip install --no-cache-dir horovod
+        sudo -E HOROVOD_GPU_ALLREDUCE=NCCL pip install --no-cache-dir -U horovod
 
     4. some configure:
         # Configure OpenMPI to run good defaults:
@@ -92,6 +92,8 @@ def update_param(pipe):
     tf.logging.info("Param:" + repr(param))
     return param
 
+
+
 def main(argv):
     pipe  = multipipeline.Pipeline()
 
@@ -139,7 +141,7 @@ def main(argv):
          train_hook.SaverHook(param.checkpoint_dir, save_every_n_steps=100),
          train_hook.TrainStateHook(param, lr, sum_loss, 
                                     {'batch_top1': top1, 'batch_top5': top5},
-                                   every_steps=100),
+                                   every_steps=100),         
     ]
     
 
@@ -150,7 +152,8 @@ def main(argv):
 
     
     # start train loop 
-    with tf.train.MonitoredTrainingSession(hooks=hooks,
+    scaffold = InitScaffold(param)
+    with tf.train.MonitoredTrainingSession(hooks=hooks,scaffold = scaffold,
                                            config=config) as mon_sess:
         while not mon_sess.should_stop():
             mon_sess.run([train_op])

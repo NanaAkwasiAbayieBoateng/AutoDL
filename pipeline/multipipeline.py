@@ -139,6 +139,8 @@ class Pipeline:
 
         self.reduce = reduce_by_copy
         # use Horovod as multi-node reducer
+
+        hvd.init()
         self.node_reduce = hvd
         self.rank = hvd.rank()
 
@@ -223,12 +225,15 @@ class Pipeline:
 
 
             device_losses[i] = total_loss
+        
 
+        #reduce gpus to cpu 
         with tf.device(self.cpu_devices[0]):
             sum_loss = self.reduce(device_losses.values(), use_mean=False)
         
+        # reduce between node
         if self.node_reduce and self.rank == 0:
-            sum_loss = self.node_reduce.reduce(sum_loss)
+            sum_loss = self.node_reduce.allreduce(sum_loss,  device_dense=self.cpu_devices[0])
 
         return device_losses, sum_loss
 
@@ -250,7 +255,7 @@ class Pipeline:
             value = self.reduce(device_values.values(), use_mean)
         
         if self.node_reduce and self.rank == 0:
-            sum_loss = self.node_reduce.reduce(sum_loss, use_mean)
+            value = self.node_reduce.allreduce(value, device_dense=self.cpu_devices[0])
         
         return value
 
@@ -269,8 +274,8 @@ class Pipeline:
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
             # todo verity the grads
-            for grad, v in tower_grad:
-                print("v name:%s, device:%s; g name:%s, device:%s" % (v.name, v.device, grad.name, grad.device))
+            #for grad, v in tower_grad:
+            #    print("v name:%s, device:%s; g name:%s, device:%s" % (v.name, v.device, grad.name, grad.device))
 
             for grad, v in tower_grad:
                 # for replicated ingore tower name
