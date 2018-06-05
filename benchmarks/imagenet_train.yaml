@@ -3,17 +3,17 @@
 --- !NameDict
 # data set 
 data_path: /root/tfrecords
-train_nums: 1280000
+train_nums: 1281167
 validation: 50000
 class_num: 10000
 
 # train 
-minibatch: 512
+minibatch: 256
 epoch: 100
 checkpoint_dir: checkpoint
 
 #model
-resnet_layer: 50
+resnet_layer: 152
 
 # init_lr: initial_learning_rate*minibatch/batch_denom
 initial_learning_rate: 0.1
@@ -26,6 +26,7 @@ boundaries:
   - 80
   - 90
 
+#lr = lr * decay_rates[i]
 decay_rates:
   - 1
   - 0.1

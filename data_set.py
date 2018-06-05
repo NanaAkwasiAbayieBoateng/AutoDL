@@ -222,7 +222,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
 
     def load_tfrecords(pattern, batch_size, repeat=-1, istrain=True):
 
-        num_parallel_batches = max(batch_size >> 2, 10)
+        num_parallel_batches = 1
 
         def map_fun(x):
             image, label, bbox = parser(x)
@@ -237,14 +237,19 @@ def imagenet_dataset(path, batch_size, repeat=-1):
             tf.contrib.data.parallel_interleave(
                 lambda filename: tf.data.TFRecordDataset(filename),
                 cycle_length=20))
-        ds = ds.prefetch(batch_size * 20)
+
+        ds = ds.prefetch(batch_size)
+
         ds = ds.apply(
               tf.contrib.data.shuffle_and_repeat(batch_size * 100, repeat))
+
         ds = ds.apply(
               tf.contrib.data.map_and_batch(
                 map_func=map_fun,
                 batch_size=batch_size,
                 num_parallel_batches=num_parallel_batches))
+
+        ds = ds.prefetch(batch_size)
         return ds
 
     train_set = load_tfrecords(
