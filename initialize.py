@@ -62,11 +62,12 @@ def InitScaffold(params):
         
         if not var.get_shape().is_compatible_with(shape):
             raise Exception("Variable:%s shape not match, graph:%s, checkpoint:%s" %(var.name, var.get_shape().as_list(), shape))
-        if varname == 'global_step':
-            print(var)
+        
+        #if varname == 'global_step':
+        #    print(var)
         restore_vars[varname] = var
 
-    print("new_vars:"+str(new_vars))
+    #print("new_vars:"+str(new_vars))
 
     saver = tf.train.Saver(var_list=restore_vars)
 

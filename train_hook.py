@@ -1,5 +1,7 @@
 import os
 import time
+import yaml
+
 from datetime import datetime
 
 #import logging
@@ -30,6 +32,8 @@ class TrainStateHook(session_run_hook.SessionRunHook):
     def __init__(self, param, lr, total_loss, metrics, every_steps=100):
 
         self.minbatch = param.minibatch
+        self.epoch_step = param.epoch_step
+        self.all_step  = param.all_step
         self.worker_num = gpu.get_nr_gpu()
         self.lr = lr
         self.total_loss = total_loss
@@ -53,6 +57,7 @@ class TrainStateHook(session_run_hook.SessionRunHook):
     def after_create_session(self, session, coord):
         '''the graph is finalized and ops can no longer be added to the graph.
         '''
+
         return super().after_create_session(session, coord)
 
     def before_run(self, run_context):  # pylint: disable=unused-argument
@@ -85,14 +90,19 @@ class TrainStateHook(session_run_hook.SessionRunHook):
 
     def logging(self, results):
         global_step = results['self_global_step']
+        epoch = global_step / self.epoch_step
         steps_per_sec = results['self_steps_per_sec']
         sample_per_sec = results['self_sample_per_sec']
         lr = results['self_lr']
         total_loss = results['self_total_loss']
+        progress = 100.0 * global_step / self.all_step
 
-        formats_str = '''global_step:{step}, steps/sec:{avg:.2f}, samples/sec:{sample:.2f}, total_loss:{total_loss:.2f}, lr:{lr}'''
+        formats_str = '''Epoch:{epoch}, minibatch:{minibatch}, global_step:{step}({process:.2f}%), steps/sec:{avg:.2f}, samples/sec:{sample:.2f}, total_loss:{total_loss:.2f}, lr:{lr}'''
         formats_str = formats_str.format(
+            epoch =epoch,
+            minibatch=self.minbatch,
             step=global_step,
+            progress=progress,
             avg=steps_per_sec,
             sample=sample_per_sec,
             total_loss=total_loss,
@@ -117,8 +127,21 @@ class SaverHook(tf.train.SessionRunHook):
         self._save_path = os.path.join(checkpoint_dir, "model.ckpt")
         self._save_every_n_steps = save_every_n_steps
 
+    def after_create_session(self, session, coord):
+        '''the graph is finalized and ops can no longer be added to the graph.
+        '''
+        # save graph 
+        with open(self._save_path+"/graph.pb.txt", 'w') as f:
+            f.write(str(session.as_graph_def()))
+        # save param
+        with open(self.self._save_path+"/param.yaml", 'w') as f)
+            yaml.dump(conf, f, default_flow_style=False)
+
+        return super().after_create_session(session, coord)
+        
     def begin(self):
         self._g_step = tf.train.get_global_step()
+
 
     def before_run(self, run_context):  # pylint: disable=unused-argument
         return tf.train.SessionRunArgs([self._g_step])
@@ -139,44 +162,6 @@ class SaverHook(tf.train.SessionRunHook):
         self._saver.save(
             session, self._save_path, global_step=step, write_meta_graph=False)
 
-
-class SaverHook(tf.train.SessionRunHook):
-    '''
-    dump the variable of model
-    https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/profiler/g3doc/command_line.md
-    '''
-
-    def __init__(self,
-                 checkpoint_dir,
-                 save_every_n_steps,
-                 max_to_keep=100,
-                 saver=None):
-        self._saver = saver if saver is not None else tf.train.Saver(
-            max_to_keep=max_to_keep)
-        self._save_path = os.path.join(checkpoint_dir, "model.ckpt")
-        self._save_every_n_steps = save_every_n_steps
-
-    def begin(self):
-        self._g_step = tf.train.get_global_step()
-
-    def before_run(self, run_context):  # pylint: disable=unused-argument
-        return tf.train.SessionRunArgs([self._g_step])
-
-    def after_run(self, run_context, run_values):
-        step = run_values.results[0]
-        if step != 0 and step % self._save_every_n_steps == 0:
-            self._saver.save(
-                run_context.session,
-                self._save_path,
-                global_step=step,
-                write_meta_graph=False)
-            logging.info('{0} Save checkpoint at {1}'.format(
-                datetime.now(), step))
-
-    def end(self, session):
-        step = session.run(tf.train.get_global_step())
-        self._saver.save(
-            session, self._save_path, global_step=step, write_meta_graph=False)
 
 
 
@@ -260,7 +245,5 @@ class ProfilerHook(tf.train.SessionRunHook):
                     show_memory=self._show_memory))
 
 
-class EvaluateHook(tf.train.SessionRunHook):
-    '''
-    test share model ?
-    '''
+
+    

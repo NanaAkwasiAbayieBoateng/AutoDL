@@ -265,7 +265,9 @@ if __name__ == '__main__':
     ds = synthetic_dataset([4, 1, 1, 1], classnum = 10)
     iterator = ds.make_initializable_iterator()
     image, label = iterator.get_next()
-
+    
+    ops = tf.get_default_graph().get_operations()
+    print(ops)
     with tf.Session() as sess:
         sess.run(iterator.initializer)
         print("Test synthetic_dataset")

@@ -6,7 +6,10 @@
 
 import tensorflow as tf
 import yaml
-import sys 
+import sys
+import os
+
+
 
 """
 As keep simple and keep scalability, just wrapper the min logic
@@ -25,6 +28,7 @@ from model         import official_model
 from learning_rate import PiecewiseLR
 from pipeline      import multipipeline
 from initialize    import InitScaffold
+from evaluater      import Evaluater
 import train_hook
 
 '''
@@ -74,15 +78,18 @@ TODO:
  - save checkpiont by params
 '''
 
-
+## TODO move single file
 def update_param(pipe):
     train_file = './cifar10_train.yaml' if len(sys.argv) == 1 else sys.argv[1]
 
     print(train_file)
     with open(train_file, 'r') as f:
         param = yaml.load(f)
+    
+    #todo compute minbatch by gpumem and model 
 
     param['all_step'] = max(int(param.epoch * param.train_nums / param.minibatch), 10)
+    param['epoch_step'] = max(int(param.train_nums / param.minibatch), 1)
     param['batch_size'] = max(int(param.minibatch / pipe.gpu_nums), 1)
     param['minibatch'] = param.batch_size*pipe.gpu_nums
 
@@ -93,9 +100,14 @@ def update_param(pipe):
     return param
 
 
+    # 
+def accuracy(labels, predicts, topk):
+    return tf.reduce_sum(tf.cast(tf.nn.in_top_k(predicts, labels, topk), tf.float32))
+
+
 
 def main(argv):
-    pipe  = multipipeline.Pipeline()
+
 
     # 1. config load, as hypter params should define in yaml config
     param = update_param(pipe) 
@@ -104,11 +116,20 @@ def main(argv):
     create_model_func = official_model.Cifar10Model(param.resnet_layer, param.class_num)
 
     train_set, vaild_set, eval__set = cifar10_dataset(param.data_path, param.batch_size, param.epoch)
+       
     
+    evaluater = Evaluater(param, eval__set, 
+                          modelfun = lambda image : create_model_func(image, False),
+                          accuracyfun =(lambda labels, predicts: accuracy(labels, predicts, 1))
+
+
+
     global_step = tf.train.get_or_create_global_step()
     lr = PiecewiseLR(param)
     opt = tf.train.MomentumOptimizer(lr, param.momentum)
 
+    
+    pipe  = multipipeline.Pipeline()
     #3 set up graph these should not modify
     #3.1 set_up dataset
     device_dataset = pipe.setup_dataset(train_set)
@@ -122,9 +143,7 @@ def main(argv):
         return tf.reduce_mean(loss)
     device_losses, sum_loss = pipe.setup_loss(device_labels, device_predicts, compute_loss_func, param.weight_decay)
     
-    # 
-    def accuracy(labels, predicts, topk):
-        return tf.reduce_sum(tf.cast(tf.nn.in_top_k(predicts, labels, topk), tf.float32))
+
 
     top1 = pipe.setup_reduce(device_labels, device_predicts, lambda x,y:accuracy(x,y, 1), use_mean=True)
     top5 = pipe.setup_reduce(device_labels, device_predicts, lambda x,y:accuracy(x,y, 5), use_mean=True)
@@ -141,13 +160,18 @@ def main(argv):
          train_hook.SaverHook(param.checkpoint_dir, save_every_n_steps=100),
          train_hook.TrainStateHook(param, lr, sum_loss, 
                                     {'batch_top1': top1, 'batch_top5': top5},
-                                   every_steps=100),         
+                                   every_steps=100),
+         evaluater.EvaluateHook(every_n_steps=1000)        
     ]
+    
     
 
     config = tf.ConfigProto(
         allow_soft_placement=True, log_device_placement=False)
+    
     config.gpu_options.allow_growth = True
+    config.use_per_session_threads = True
+    config.isolate_session_state = True
     #config.gpu_options.per_process_gpu_memory_fraction = 0.4
 
     

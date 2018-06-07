@@ -208,7 +208,8 @@ class YtPeriodTaskEvent:
 
 if __name__ == '__main__':
     
-    with open('conf/cifar10_train.yaml') as f:
+    with open('benchmarks/cifar10_train.yaml') as f:
        conf = yaml.load(f)
-    print("conf.name:%s, conf.data:%s" % (conf.name, conf.data))
+    #print("conf.name:%s, conf.data:%s" % (conf.name, conf.data))
     print(type(conf))
+    print(yaml.dump(conf, default_flow_style=False))
