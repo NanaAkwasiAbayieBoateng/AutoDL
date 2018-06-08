@@ -68,13 +68,14 @@ def fixed_padding(inputs, kernel_size, data_format):
   pad_total = kernel_size - 1
   pad_beg = pad_total // 2
   pad_end = pad_total - pad_beg
-
+  
   if data_format == 'channels_first':
     padded_inputs = tf.pad(inputs, [[0, 0], [0, 0],
                                     [pad_beg, pad_end], [pad_beg, pad_end]])
   else:
     padded_inputs = tf.pad(inputs, [[0, 0], [pad_beg, pad_end],
-                                    [pad_beg, pad_end], [0, 0]])
+                                   [pad_beg, pad_end], [0, 0]])
+   
   return padded_inputs
 
 
@@ -85,11 +86,13 @@ def conv2d_fixed_padding(inputs, filters, kernel_size, strides, data_format):
   if strides > 1:
     inputs = fixed_padding(inputs, kernel_size, data_format)
 
-  return tf.layers.conv2d(
+  layer = tf.layers.conv2d(
       inputs=inputs, filters=filters, kernel_size=kernel_size, strides=strides,
       padding=('SAME' if strides == 1 else 'VALID'), use_bias=False,
       kernel_initializer=tf.variance_scaling_initializer(),
       data_format=data_format)
+  
+  return layer
 
 
 ################################################################################
@@ -166,10 +169,12 @@ def _building_block_v2(inputs, filters, training, projection_shortcut, strides,
   Returns:
     The output tensor of the block; shape should match inputs.
   """
+  
   shortcut = inputs
   inputs = batch_norm(inputs, training, data_format)
+  
   inputs = tf.nn.relu(inputs)
-
+  
   # The projection shortcut should come after the first batch norm and ReLU
   # since it performs a 1x1 convolution.
   if projection_shortcut is not None:
@@ -178,13 +183,13 @@ def _building_block_v2(inputs, filters, training, projection_shortcut, strides,
   inputs = conv2d_fixed_padding(
       inputs=inputs, filters=filters, kernel_size=3, strides=strides,
       data_format=data_format)
-
+  
   inputs = batch_norm(inputs, training, data_format)
+  
   inputs = tf.nn.relu(inputs)
   inputs = conv2d_fixed_padding(
       inputs=inputs, filters=filters, kernel_size=3, strides=1,
       data_format=data_format)
-
   return inputs + shortcut
 
 
@@ -337,8 +342,7 @@ def block_layer(inputs, filters, bottleneck, block_fn, blocks, strides,
   # Only the first block per block_layer uses projection_shortcut and strides
   inputs = block_fn(inputs, filters, training, projection_shortcut, strides,
                     data_format)
-
-  for _ in range(1, blocks):
+  for i in range(1, blocks):
     inputs = block_fn(inputs, filters, training, None, 1, data_format)
 
   return tf.identity(inputs, name)
@@ -431,13 +435,13 @@ class Model(object):
       A logits Tensor with shape [<batch_size>, self.num_classes].
     """
 
-    ''' default is channels_first
+    #default is channels_first
     if self.data_format == 'channels_first':
       # Convert the inputs from channels_last (NHWC) to channels_first (NCHW).
       # This provides a large performance boost on GPU. See
       # https://www.tensorflow.org/performance/performance_guide#data_formats
       inputs = tf.transpose(inputs, [0, 3, 1, 2])
-    '''
+    
 
     inputs = conv2d_fixed_padding(
         inputs=inputs, filters=self.num_filters, kernel_size=self.kernel_size,
@@ -450,7 +454,7 @@ class Model(object):
           strides=self.first_pool_stride, padding='SAME',
           data_format=self.data_format)
       inputs = tf.identity(inputs, 'initial_max_pool')
-
+    
     for i, num_blocks in enumerate(self.block_sizes):
       num_filters = self.num_filters * (2**i)
       inputs = block_layer(
@@ -458,7 +462,7 @@ class Model(object):
           block_fn=self.block_fn, blocks=num_blocks,
           strides=self.block_strides[i], training=training,
           name='block_layer{}'.format(i + 1), data_format=self.data_format)
-
+    
     inputs = batch_norm(inputs, training, self.data_format)
     inputs = tf.nn.relu(inputs)
 

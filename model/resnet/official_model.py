@@ -1,6 +1,8 @@
 import tensorflow as tf
-
-from . import resnet_model
+import sys
+sys.path.append('.')
+#from model.resnet import resnet_model
+import model.resnet.resnet_model as  resnet_model
 
 class ImageNetModel:
     '''
@@ -45,21 +47,28 @@ class ImageNetModel:
 
 class Cifar10Model:
 
-    def __init__(self, layernums=32, num_classes=10):
-        self.data_format = 'channels_first'
+    def __init__(self, layernums=32, num_classes=10, data_format='channels_first'):
+        self.data_format = data_format
         self.version = resnet_model.DEFAULT_VERSION  # use v2
         self.dtype = tf.float32
         self.final_size = 64
-
+        self.layernums = layernums
+        self.num_classes = num_classes
         if layernums % 6 != 2:
-          raise ValueError('resnet_size must be 6n + 2:', resnet_size)
+          raise ValueError('resnet_size must be 6n + 2:', layernums)
 
-        num_blocks = (layernums - 2) // 6
+        self.num_blocks = (layernums - 2) // 6
+
+       
+
+    def __call__(self, inputs, training=True):
+        
+        self.data_format = 'channels_first' if training else 'channels_last'
 
         self.model = resnet_model.Model(
-            resnet_size=layernums,
+            resnet_size=self.layernums,
             bottleneck=False,
-            num_classes=num_classes,
+            num_classes=self.num_classes,
             num_filters=16,
             kernel_size=3,
             conv_stride=1,
@@ -67,13 +76,11 @@ class Cifar10Model:
             first_pool_stride=None,
             second_pool_size=8,  #no used
             second_pool_stride=1,  #no used
-            block_sizes=[num_blocks] * 3,
+            block_sizes=[self.num_blocks] * 3,
             block_strides=[1, 2, 2, 2],
             final_size=self.final_size,
             version=self.version,
             data_format=self.data_format)
-
-    def __call__(self, inputs, training=True):
         return self.model(inputs, training)
         
 
@@ -84,13 +91,15 @@ if __name__ == "__main__":
 
     from tools.graphviz_visual import print_tensortree
 
-    m = ResnetModel(34, 10)
+    m = Cifar10Model(32, 10)
     g = tf.Graph()
     with g.as_default():
         x = tf.ones([2, 3, 32, 32], tf.float32)
         x = m(x, training=False)
-        print_tensortree(x)
-    
+        #print_tensortree(x)
+        print([o.name+","+o.type for o in g.get_operations()])
+        print([o.name+","+o.type for o in g.get_operations()])
+        
         #sess = tf.Session()
         #sess.run(tf.global_variables_initializer())
 

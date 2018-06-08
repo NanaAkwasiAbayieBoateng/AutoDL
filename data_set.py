@@ -78,31 +78,31 @@ def cifar10_dataset(path, batch_size, repeat=-1):
         image = tf.decode_raw(features['image'], tf.uint8)
         # hard code
         image.set_shape([3 * 32 * 32])
+        image = tf.reshape(image, [3, 32, 32])
+
+        #output NHWC
+        image = tf.cast(tf.transpose(image, [1, 2, 0]), tf.float32)
+
         label = tf.cast(features['label'], tf.int32)
+        
         return image, label
 
     def augment(image):
         # Reshape to CHW -> HWC for augment
-        image = tf.cast(
-            tf.transpose(tf.reshape(image, [3, 32, 32]), [1, 2, 0]),
-            tf.float32)
-
         image = tf.image.resize_image_with_crop_or_pad(image, 40, 40)
         image = tf.random_crop(
             image, [32, 32, 3])  # size = [crop_height, crop_width, 3].
 
         image = tf.image.random_flip_left_right(image)
 
-        "32,32,3  -> 3,32,32 HWC -> CHW"
-        image = tf.transpose(image, [2, 0, 1])
-
+        #"32,32,3  -> 3,32,32 HWC -> CHW"
+        #image = tf.transpose(image, [2, 0, 1])
         #Todo show image
         return image
 
     def nomarlize(image):
         image = tf.cast(image, tf.float32)
         image = image / 127.5 - 1.0
-
         #image = tf.image.per_image_standardization(image)
 
         return image
@@ -134,14 +134,16 @@ def cifar10_dataset(path, batch_size, repeat=-1):
                 map_func=map_fun,
                 batch_size=batch_size,
                 num_parallel_batches=num_parallel_batches))
+        
+        ds = ds.prefetch(batch_size)
         return ds
 
     train_set = load_tfrecords(
         path + "/train.tfrecords", batch_size, repeat=-1, istrain=True)
     vaild_set = load_tfrecords(
-        path + "/validation.tfrecords", batch_size, repeat=-1, istrain=False)
+        path + "/validation.tfrecords", batch_size, repeat=1, istrain=False)
     eval__set = load_tfrecords(
-        path + "/eval.tfrecords", batch_size, repeat=-1, istrain=False)
+        path + "/eval.tfrecords", batch_size, repeat=1, istrain=False)
 
     return train_set, vaild_set, eval__set
 

@@ -2,6 +2,7 @@ import sys
 import os
 
 import tensorflow as tf
+from tensorflow.python.platform import tf_logging as logging
 
 """
 # model config
@@ -17,6 +18,7 @@ def InitScaffold(params):
     # 
     model_init = params.model_init
     if len(model_init.pre_train_dir) == 0:
+        logging.info("No pre_train_dir found, use a new Scaffold")
         return tf.train.Scaffold()
     
     # see https://docs.python.org/3/library/exceptions.html
@@ -26,10 +28,17 @@ def InitScaffold(params):
     ckpt_file_or_dir = model_init.pre_train_dir
     if os.path.isdir(model_init.pre_train_dir) and model_init.pre_train_step > 0:
         ckpt_file_or_dir +=  '/model.ckpt-{0}'.format(model_init.pre_train_step)
-
+        if not os.path.exists(ckpt_file_or_dir+".index"):
+            raise FileExistsError(ckpt_file_or_dir)
     elif os.path.isdir(model_init.pre_train_dir):
-        ckpt_file_or_dir = tf.train.get_checkpoint_state(ckpt_file_or_dir).model_checkpoint_path
+        checkpoint_state = tf.train.get_checkpoint_state(ckpt_file_or_dir)
+        if not checkpoint_state:
+            logging.info("No " + ckpt_file_or_dir +"/checkppoint found, use a new Scaffold")
+            return tf.train.Scaffold()
+        
+        ckpt_file_or_dir = checkpoint_state.model_checkpoint_path
     
+    tf.logging.info("load variable from:" + ckpt_file_or_dir)
     
     reader = tf.train.load_checkpoint(ckpt_file_or_dir)
 

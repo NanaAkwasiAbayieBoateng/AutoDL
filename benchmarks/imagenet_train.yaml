@@ -10,7 +10,7 @@ class_num: 10000
 # train 
 minibatch: 256
 epoch: 100
-checkpoint_dir: checkpoint
+checkpoint: checkpoint
 
 #model
 resnet_layer: 152

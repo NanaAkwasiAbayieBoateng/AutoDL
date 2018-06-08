@@ -29,15 +29,15 @@ class TrainStateHook(session_run_hook.SessionRunHook):
     Loger train state
     '''
 
-    def __init__(self, param, lr, total_loss, metrics, every_steps=100):
+    def __init__(self, param, lr, total_loss, metrics, every_sec=3):
 
         self.minbatch = param.minibatch
-        self.epoch_step = param.epoch_step
+        self.step_per_epoch = param.step_per_epoch
         self.all_step  = param.all_step
         self.worker_num = gpu.get_nr_gpu()
         self.lr = lr
         self.total_loss = total_loss
-        self.every_steps = every_steps
+        self.every_sec = every_sec
         self.fetches = metrics
         self._start_steps = None
 
@@ -73,41 +73,40 @@ class TrainStateHook(session_run_hook.SessionRunHook):
             self._last_time = self._start_time
             self._last_steps = self._start_steps
             return
-
-        if global_step < (self._last_steps + self.every_steps):
-            return
-
+        
+        
         elapsed_time = time.time() - self._last_time
         elapsed_steps = global_step - self._last_steps
+
+        if elapsed_time < self.every_sec:
+            return
+
         #updater
         self._last_time, self._last_steps = time.time(), global_step
 
-        results['self_steps_per_sec'] = elapsed_steps / elapsed_time
-        results[
-            'self_sample_per_sec'] = results['self_steps_per_sec'] * self.minbatch
+        #steps_per_sec  = elapsed_steps / elapsed_time
+        sample_per_sec=  self.minbatch * elapsed_steps / elapsed_time
 
-        self.logging(results)
+        self.logging(results, global_step, sample_per_sec)
 
-    def logging(self, results):
-        global_step = results['self_global_step']
-        epoch = global_step / self.epoch_step
-        steps_per_sec = results['self_steps_per_sec']
-        sample_per_sec = results['self_sample_per_sec']
+    def logging(self, results, global_step, sample_per_sec):
+        
+        epoch = global_step // self.step_per_epoch
+        step  = global_step % self.step_per_epoch
+
         lr = results['self_lr']
         total_loss = results['self_total_loss']
-        progress = 100.0 * global_step / self.all_step
+        progress = 100.0 * step / self.step_per_epoch
 
-        formats_str = '''Epoch:{epoch}, minibatch:{minibatch}, global_step:{step}({process:.2f}%), steps/sec:{avg:.2f}, samples/sec:{sample:.2f}, total_loss:{total_loss:.2f}, lr:{lr}'''
+        formats_str = '''Epoch:{epoch}, step:{step}({progress:.2f}%), samples/sec:{sample:.2f}, total_loss:{total_loss:.4f}, lr:{lr}'''
         formats_str = formats_str.format(
-            epoch =epoch,
-            minibatch=self.minbatch,
-            step=global_step,
+            epoch=epoch,
+            step=step,
             progress=progress,
-            avg=steps_per_sec,
             sample=sample_per_sec,
             total_loss=total_loss,
             lr=lr)
-
+        
         metrics = [
             " %s:%s" % (k, v) for k, v in results.items()
             if not k.startswith('self_')
@@ -118,13 +117,18 @@ class TrainStateHook(session_run_hook.SessionRunHook):
 
 class SaverHook(tf.train.SessionRunHook):
     def __init__(self,
-                 checkpoint_dir,
+                 param,
                  save_every_n_steps,
                  max_to_keep=100,
-                 saver=None):
+                 saver=None,
+                 evaluater=None):
         self._saver = saver if saver is not None else tf.train.Saver(
             max_to_keep=max_to_keep)
-        self._save_path = os.path.join(checkpoint_dir, "model.ckpt")
+        
+        self.evaluater = evaluater
+        self.param = param
+        self._save_path = param.checkpoint
+        self._save_mode_path = param.checkpoint + "/model.ckpt"
         self._save_every_n_steps = save_every_n_steps
 
     def after_create_session(self, session, coord):
@@ -132,11 +136,13 @@ class SaverHook(tf.train.SessionRunHook):
         '''
         # save graph 
         with open(self._save_path+"/graph.pb.txt", 'w') as f:
-            f.write(str(session.as_graph_def()))
-        # save param
-        with open(self.self._save_path+"/param.yaml", 'w') as f)
-            yaml.dump(conf, f, default_flow_style=False)
+            f.write(str(session.graph.as_graph_def()))
+                # save param
+        param_str = yaml.dump(self.param, default_flow_style=False)
+        with open(self._save_path+"/param.yaml", 'w') as f:
+            f.write(param_str)
 
+        logging.info("save train param:"+ repr(self.param))
         return super().after_create_session(session, coord)
         
     def begin(self):
@@ -151,11 +157,13 @@ class SaverHook(tf.train.SessionRunHook):
         if step != 0 and step % self._save_every_n_steps == 0:
             self._saver.save(
                 run_context.session,
-                self._save_path,
+                self._save_mode_path,
                 global_step=step,
                 write_meta_graph=False)
             logging.info('{0} Save checkpoint at {1}'.format(
                 datetime.now(), step))
+            if self.evaluater:
+                self.evaluater.post_step(step)
 
     def end(self, session):
         step = session.run(tf.train.get_global_step())

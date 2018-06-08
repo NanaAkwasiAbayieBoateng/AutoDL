@@ -192,18 +192,36 @@ class BaseModel:
 class TestModel(BaseModel):
     
   def __init__(self, classnum=10):
-    super().__init__(self)
+    self.classnum = classnum
+    super().__init__()
     
-  def __call_(self, x, feature_dims=4):
+  def __call__(self, x, feature_dims=4):
     
     # conv 
-    x = self._conv(x, 3, feature_dims, 1)
+    #x = self._conv(x, 3, feature_dims, 1)
     x = self._batch_norm(x)
-    x = self._relu(x)
-    x = self._global_avg_pool(x)
+    #x = self._relu(x)
+    #x = self._global_avg_pool(x)
 
     # shape :[batch_size, feature_dims]
 
-    x = tf.reshape(x, [-1, feature_dims])
-    x = self._fully_connected(x, classnum)
+    #x = tf.reshape(x, [-1, feature_dims])
+    #x = self._fully_connected(x, self.classnum)
     return x
+
+if __name__ == "__main__":
+
+    import sys
+    sys.path.append('.')
+
+    
+
+    m = TestModel()
+    g = tf.Graph()
+    with g.as_default():
+        x = tf.ones([2, 3, 32, 32], tf.float32)
+        x = m(x)
+        #print_tensortree(x)
+        print([o.name+","+o.type for o in g.get_operations()])
+        print([o.type for o in g.get_operations()])
+        

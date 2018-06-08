@@ -93,7 +93,7 @@ def main(argv):
 
     hooks = pipe.get_hook() + [
          tf.train.StopAtStepHook(last_step = param.all_step),
-         train_hook.SaverHook(param.checkpoint_dir, save_every_n_steps=100),
+         train_hook.SaverHook(param.checkpoint, save_every_n_steps=100),
          train_hook.TrainStateHook(param, lr, sum_loss,
                                     {'batch_top1': top1, 'batch_top5': top5},
                                    every_steps=100),

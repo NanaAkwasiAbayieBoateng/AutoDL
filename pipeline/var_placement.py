@@ -1,6 +1,6 @@
 import tensorflow as tf
 import operator
-
+from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.framework import device as pydev
 
 
@@ -61,6 +61,20 @@ class BalancePlacement:
         self.gpu_nums = gpu_nums
         self.worker_devices = [deviceTosepc(i) for i in range(self.gpu_nums)]
         self.sizes = [0] * self.gpu_nums
+        self.untrainable_vars = {}
+    
+    def _variable_getter(self, getter, name, *args, **kwargs):
+        
+        if 'trainable' in kwargs and not kwargs['trainable']:
+            var = self.untrainable_vars.get(name, None)
+            if var is None:
+                var = getter(name, *args, **kwargs)
+                self.untrainable_vars[name] = var
+                logging.info("untrainable:" + str(var))
+
+            return var
+        else:
+            return getter(name, *args, **kwargs)
 
     def _device_getter(self, currend_deviceid):
         #op placement to gpu
@@ -85,9 +99,10 @@ class BalancePlacement:
                 strategy = strategy + ", by op.type" + str(currend_deviceid)
 
             # as we only update the first tower BN, so all bn variable at deviceid0
+            # bug: How to identify the BN variable
             elif 'BatchNorm' in op.name:
                 default_spec.device_index = 0
-                strategy = strategy + ", by BatchNorm" + str(currend_deviceid)
+                strategy = strategy + ", by batch_normalization" + str(currend_deviceid)
             else:
                 # min_shapesize
                 device_index, _ = min(
