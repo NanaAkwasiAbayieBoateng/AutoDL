@@ -232,7 +232,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
             image = augment(image, bbox)
             """ image has shape [224, 224, 3] need to transpose"""
 
-            image = tf.transpose(image, [2, 0, 1])
+            image = tf.transpose(image, [2, 0, 1]) if istrain else image
             return (image, label)
 
         ds = tf.data.Dataset.list_files(pattern)

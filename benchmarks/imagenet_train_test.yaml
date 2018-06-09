@@ -2,7 +2,7 @@
 
 --- !NameDict
 # data set 
-name: imagenet
+name: imagenet_test
 
 # train 
 data_path: ./test_dataset/imagenet_sample/

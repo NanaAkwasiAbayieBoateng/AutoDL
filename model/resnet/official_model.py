@@ -17,15 +17,26 @@ class ImageNetModel:
     }
 
     def __init__(self, layernums=50, num_classes=10000):
-        self.data_format = 'channels_first'
+       
         self.version = resnet_model.DEFAULT_VERSION  # use v2
         self.dtype = tf.float32
+        self.layernums = layernums
+        self.num_classes = num_classes
+
         self.bottleneck, self.final_size = (False, 512) if layernums < 50 else (True, 2048)
 
+
+
+    def __call__(self, inputs, training=True):
+        '''
+        inputs should be NCHW
+        '''
+        self.data_format = 'channels_first' if training else 'channels_last'
+
         self.model = resnet_model.Model(
-            resnet_size=layernums,
+            resnet_size=self.layernums,
             bottleneck=self.bottleneck,
-            num_classes=num_classes,
+            num_classes=self.num_classes,
             num_filters=64,
             kernel_size=7,
             conv_stride=2,
@@ -33,16 +44,11 @@ class ImageNetModel:
             first_pool_stride=2,
             second_pool_size=7,  #no used
             second_pool_stride=1,  #no used
-            block_sizes=ImageNetModel.default_layer_config[layernums],
+            block_sizes=ImageNetModel.default_layer_config[self.layernums],
             block_strides=[1, 2, 2, 2],
             final_size=self.final_size,
             version=self.version,
             data_format=self.data_format)
-
-    def __call__(self, inputs, training=True):
-        '''
-        inputs should be NCHW
-        '''
         return self.model(inputs, training)
 
 class Cifar10Model:

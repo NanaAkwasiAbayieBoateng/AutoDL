@@ -7,32 +7,7 @@
 
 import sys
 import os
-import logging
 
-from logging.handlers import TimedRotatingFileHandler
-
-
-"""
-As keep simple and keep scalability, just wrapper the min logic
-this just a configure file
-"""
-#class TraceHandker(TimedRotatingFileHandler):
-#TraceHandker(filename='a.log', when='h', interval=1)
-class TraceHandker(logging.StreamHandler):
-    def __init__(self, *arg, **kwargs):
-        super().__init__(*arg, **kwargs)
-
-    def emit(self, record):
-        # 7 is get by debug
-        frame = sys._getframe(7)
-        code = frame.f_code
-        record.msg = record.msg + " " + ":".join((code.co_name, code.co_filename,str(frame.f_lineno),))
-        super().emit(record)
-        
-FORMAT = '%(asctime)-15s %(process)d %(levelname)s %(message)s'
-handlers=[TraceHandker()]
-
-logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers = handlers)
 
 # modules
 sys.path.append('.')
@@ -41,13 +16,14 @@ sys.path.append('.')
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
+import logger
 from param         import Configure
 from data_set      import cifar10_dataset
 from model         import official_model
 from learning_rate import PiecewiseLR
 from pipeline      import multipipeline
 from initialize    import InitScaffold
-from evaluater      import Evaluater
+from evaluater     import Evaluater
 import train_hook
 
 '''
@@ -112,13 +88,13 @@ def accuracy(labels, predicts, topk):
 
 def main(argv):
     conf_file = './cifar10_train.yaml' if len(sys.argv) == 1 else sys.argv[1]
+    
    
     # 1. config load, as hypter params should define in yaml config
     config = Configure(conf_file)
     config.reconfigure()
     param = config.param
 
-    #print(tf.get_default_graph().get_operations())
     # 2. selet a model, dataset, lr, opt, and so on,  as these can be enumeration.
     create_model_func = official_model.Cifar10Model(param.resnet_layer, param.class_num) 
     
@@ -154,9 +130,6 @@ def main(argv):
     
     #3.3 set_up gradient compute and update
     train_op = pipe.setup_train(device_losses, opt)
-    
-    
-    #TODO add restore hook
     
     hooks = pipe.get_hook() + [
          tf.train.StopAtStepHook(last_step = param.all_step),
