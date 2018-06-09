@@ -12,11 +12,12 @@ import os
 # modules
 sys.path.append('.')
 
-
+#import before tf
+import logger
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
-import logger
+
 from param         import Configure
 from data_set      import imagenet_dataset
 from model         import official_model
@@ -76,12 +77,12 @@ TODO:
 
 
 def train_dataset(param):
-    train_set, eval__set = imagenet_dataset(param.data_path, param.batch_size, param.epoch)
+    train_set, eval__set = imagenet_dataset(param.data_path, param.batch_size)
 
     return train_set
 
 def eval_dataset(param):
-    train_set, eval__set = imagenet_dataset(param.data_path, param.batch_size, param.epoch)
+    train_set, eval__set = imagenet_dataset(param.data_path, param.batch_size)
 
     return eval__set    
     
@@ -98,8 +99,8 @@ def main(argv):
     param = config.param
 
     # 2. selet a model, dataset, lr, opt, and so on,  as these can be enumeration.
-    create_model_func = official_model.ImageNetModel(param.resnet_layer, param.class_num)
-
+    create_model_func = official_model.ImageNetModel(param.resnet_layer, param.class_num) 
+    
     evaluater = Evaluater(param, eval_dataset, 
                           modelfun = lambda image : create_model_func(image, False),
                           accuracyfun = lambda labels, predicts: accuracy(labels, predicts, 1))
@@ -135,7 +136,7 @@ def main(argv):
     
     hooks = pipe.get_hook() + [
          tf.train.StopAtStepHook(last_step = param.all_step),
-         train_hook.SaverHook(param, save_every_n_steps=1000, evaluater=evaluater),
+         train_hook.SaverHook(param, save_every_n_steps=100, evaluater=evaluater),
          train_hook.TrainStateHook(param, lr, sum_loss, 
                                     {'batch_top1': top1, 'batch_top5': top5},
                                    every_sec = 15)     

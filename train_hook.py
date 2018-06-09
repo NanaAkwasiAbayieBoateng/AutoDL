@@ -119,7 +119,7 @@ class SaverHook(tf.train.SessionRunHook):
     def __init__(self,
                  param,
                  save_every_n_steps,
-                 max_to_keep=100,
+                 max_to_keep=10,
                  saver=None,
                  evaluater=None):
         self._saver = saver if saver is not None else tf.train.Saver(
@@ -130,6 +130,8 @@ class SaverHook(tf.train.SessionRunHook):
         self._save_path = param.checkpoint
         self._save_mode_path = param.checkpoint + "/model.ckpt"
         self._save_every_n_steps = save_every_n_steps
+        self.max_to_keep = max_to_keep
+        self._save_list = []
 
     def after_create_session(self, session, coord):
         '''the graph is finalized and ops can no longer be added to the graph.
@@ -164,6 +166,18 @@ class SaverHook(tf.train.SessionRunHook):
                 datetime.now(), step))
             if self.evaluater:
                 self.evaluater.post_step(step)
+            
+            # keep last
+            self._save_list.append(step)
+            if len(self._save_list) > self.max_to_keep:
+                last = self._save_list[0]
+                self._save_list = self._save_list[1:]
+                file = "model.ckpt-%s.data-00000-of-00001" %  last
+                if os.path.exists(file):
+                    os.remove(file)
+                file = "model.ckpt-%s.index" %  last
+                if os.path.exists(file):
+                    os.remove(file)
 
     def end(self, session):
         step = session.run(tf.train.get_global_step())

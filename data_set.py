@@ -5,6 +5,7 @@
 just for easy dataset import
 
 '''
+import os
 import tensorflow as tf
 from  augment import imagenet_preprocessing
 
@@ -138,7 +139,7 @@ def cifar10_dataset(path, batch_size, repeat=-1):
         
         ds = ds.prefetch(batch_size)
         return ds
-
+    
     train_set = load_tfrecords(
         path + "/train.tfrecords", batch_size, repeat=-1, istrain=True)
     vaild_set = load_tfrecords(
@@ -149,7 +150,7 @@ def cifar10_dataset(path, batch_size, repeat=-1):
     return train_set, vaild_set, eval__set
 
 
-def imagenet_dataset(path, batch_size, repeat=-1):
+def imagenet_dataset(path, batch_size):
     """create imagenet data for classify.
         See https://github.com/tensorflow/models/tree/master/research/slim/datasets
         See also: https://github.com/tensorflow/models/offical/resnet
@@ -161,6 +162,8 @@ def imagenet_dataset(path, batch_size, repeat=-1):
     Return :
       train_set, vaild_set:
     """
+    if not os.path.exists(path):
+        raise FileExistsError(path)
 
     def parser(serialized_example):
         """cpoy for tensorflow benchmarks.
@@ -218,8 +221,8 @@ def imagenet_dataset(path, batch_size, repeat=-1):
 
         return image, label, bbox
 
-    def augment(image, bbox):
-        image = imagenet_preprocessing.preprocess_image(image, bbox, 224, 224, 3, True)
+    def augment(image, bbox, istrain):
+        image = imagenet_preprocessing.preprocess_image(image, bbox, 224, 224, 3, istrain)
         return image
 
 
@@ -229,12 +232,15 @@ def imagenet_dataset(path, batch_size, repeat=-1):
 
         def map_fun(x):
             image, label, bbox = parser(x)
-            image = augment(image, bbox)
-            """ image has shape [224, 224, 3] need to transpose"""
-
-            image = tf.transpose(image, [2, 0, 1]) if istrain else image
+            image = augment(image, bbox, istrain)
+             
+            """ image has shape [224, 224, 3] need to transpos NCHW"""
+            #if istrain:
+            #    image = tf.transpose(image, [2, 0, 1]) 
             return (image, label)
-
+        
+        # this is bug // can hold the input
+        pattern = '/'.join([p for p in pattern.split('/') if len(p) > 0])
         ds = tf.data.Dataset.list_files(pattern)
         ds = ds.apply(
             tf.contrib.data.parallel_interleave(
@@ -265,7 +271,7 @@ def imagenet_dataset(path, batch_size, repeat=-1):
 
 if __name__ == '__main__':
 
-
+    '''
     ds = synthetic_dataset([4, 1, 1, 1], classnum = 10)
     iterator = ds.make_initializable_iterator()
     image, label = iterator.get_next()
@@ -278,6 +284,7 @@ if __name__ == '__main__':
         print(sess.run([image, label]))
 
     '''
+    '''
     train_set, vaild_set, eval__set = cifar10_dataset('./test_dataset/cifar10', batch_size=2, repeat=-1)
     iterator = train_set.make_initializable_iterator()
     image, label = iterator.get_next()
@@ -287,15 +294,24 @@ if __name__ == '__main__':
         print("Test cifar10_dataset")
         print(sess.run([image, label]))
     '''
-    '''
-    train_set, vaild_set = imagenet_dataset('./test_dataset/imagenet_sample', batch_size=1, repeat=-1)
-    iterator = train_set.make_initializable_iterator()
-    image, label = iterator.get_next()
+    
+    train_set, vaild_set = imagenet_dataset('./test_dataset/imagenet_sample', batch_size=2)
+    train_iterator = train_set.make_initializable_iterator()
+    vaild_iterator = vaild_set.make_initializable_iterator()
 
-    with tf.Session() as sess:
-        sess.run(iterator.initializer)
+    train_image, train_label = train_iterator.get_next()
+    vaild_image, vaild_label = vaild_iterator.get_next()
+
+    config = tf.ConfigProto(
+        allow_soft_placement=True, log_device_placement=False)
+    scaffold = tf.train.Scaffold()
+
+    with tf.train.MonitoredTrainingSession(hooks=[],  scaffold = scaffold, config=config) as sess:
+        sess.run(train_iterator.initializer)
+        sess.run(vaild_iterator.initializer)
         #print(sess.run([image, label, bbox]))
-        print('Test imagenet')
-        v1, v2 = sess.run([image, label])
-    '''
+        for i in range(0,3):
+            v1, v2 = sess.run([train_image, vaild_image])
+            print('Test imagenet %s %s' % (v1.shape, v2.shape))
+    
 

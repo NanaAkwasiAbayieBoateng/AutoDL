@@ -37,6 +37,6 @@ class Configure:
         if not os.path.exists(param['checkpoint']):
              os.system("mkdir -p " + param['checkpoint'])
         
-        logging.info("reconfire:"+repr(self.param))
+        logging.info("reconfigure:"+repr(self.param))
 
         

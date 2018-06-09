@@ -133,8 +133,8 @@ class Pipeline:
         self.gpu_nums = gpu.get_nr_gpu()
         
         ##  placement stragety 
-        self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
-        #self.vgr = var_placement.BalancePlacement(self.gpu_nums)
+        #self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
+        self.vgr = var_placement.BalancePlacement(self.gpu_nums)
         # self.vgr = var_placement.MasterPlacement(self.gpu_nums)
 
         # use Horovod as multi-node reducer
@@ -155,7 +155,7 @@ class Pipeline:
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
         os.environ['TF_GPU_THREAD_COUNT'] = '2'
 
-        logging.info("pipeline init done, rand:%d gpu:%s" % (self.rank, self.vgr.worker_devices))
+        logging.info("pipeline init done, rank:%d gpu:%s" % (self.rank, self.vgr.worker_devices))
 
 
     def get_hook(self):
@@ -192,7 +192,6 @@ class Pipeline:
             var_scope, op_scope, device_scope = self.vgr.get_create_scope(i)
             with var_scope, op_scope, device_scope:
                 image, label = device_dataset[i]
-                print(label.device)
                 assert label.device == dev
                 assert image.device == dev
 

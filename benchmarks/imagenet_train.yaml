@@ -10,7 +10,7 @@ train_nums: 1281167
 class_num: 10000
 
 #eval 
-validation: 50000
+validation_num: 50000
 # update by cpu 
 eval_thread_num: -1
 

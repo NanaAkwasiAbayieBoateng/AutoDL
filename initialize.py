@@ -2,7 +2,7 @@ import sys
 import os
 
 import tensorflow as tf
-from tensorflow.python.platform import tf_logging as logging
+import logging
 
 """
 # model config
@@ -38,13 +38,18 @@ def InitScaffold(params):
         
         ckpt_file_or_dir = checkpoint_state.model_checkpoint_path
     
-    tf.logging.info("load variable from:" + ckpt_file_or_dir)
+    logging.info("load variable from:" + ckpt_file_or_dir)
     
     reader = tf.train.load_checkpoint(ckpt_file_or_dir)
 
     # as the model variable maybe has name space
     var_to_shape_map = reader.get_variable_to_shape_map()
     strip_var_to_shape_map = {}
+    
+    #debug
+    #names = [k+":"+str(v) for k,v in var_to_shape_map.items()]
+    #print('\n'.join(sorted(names)))
+
 
     for k,v in var_to_shape_map.items():
         s = max(k.find('/')+1, 0)
@@ -70,8 +75,9 @@ def InitScaffold(params):
             continue
         
         if not var.get_shape().is_compatible_with(shape):
-            raise Exception("Variable:%s shape not match, graph:%s, checkpoint:%s" %(var.name, var.get_shape().as_list(), shape))
+            raise Exception("Variable not match, graph: %s%s, checkpoint:%s%s" %(var.name, var.get_shape().as_list(), varname,shape))
         
+        #print("Variable match, graph: %s%s, checkpoint:%s%s" %(var.name, var.get_shape().as_list(), varname,shape))
         #if varname == 'global_step':
         #    print(var)
         restore_vars[varname] = var

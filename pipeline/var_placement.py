@@ -173,7 +173,7 @@ class BalancePlacement(MultGPUPlacement):
                 default_spec.device_index = device_index
 
                 # as varable op, which should only has one output
-                assert op.outputs.size() == 1
+                assert len(op.outputs)== 1
                 
                 var_size = op.outputs[0].get_shape().num_elements()
                 self.sizes[device_index] += var_size

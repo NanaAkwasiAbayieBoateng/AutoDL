@@ -11,7 +11,6 @@ this just a configure file
 """
 #class TraceHandker(TimedRotatingFileHandler):
 #TraceHandker(filename='a.log', when='h', interval=1)
-#class TraceHandker(logging.StreamHandler):
 class StreamTraceHandker(logging.StreamHandler):
     def __init__(self, *arg, **kwargs):
         super().__init__(*arg, **kwargs)
@@ -36,10 +35,7 @@ class FileTraceHandker(logging.StreamHandler):
         
 #FORMAT = '%(asctime)-15s %(name)s %(process)d %(levelname)s %(message)s'
 FORMAT = '%(asctime)-15s %(process)d %(levelname)s %(message)s'
-logging.basicConfig(format=FORMAT, level=logging.DEBUG)
-handlers=[StreamTraceHandker()]
-
-logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers = handlers)
+logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers = [StreamTraceHandker()])
 
 
 def getLogger(name, path):

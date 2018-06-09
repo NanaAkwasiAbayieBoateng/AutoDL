@@ -436,6 +436,7 @@ class Model(object):
     """
 
     #default is channels_first
+    #input NHWC, train need channels_first tranpose, valid nothing 
     if self.data_format == 'channels_first':
       # Convert the inputs from channels_last (NHWC) to channels_first (NCHW).
       # This provides a large performance boost on GPU. See

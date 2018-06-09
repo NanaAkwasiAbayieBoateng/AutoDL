@@ -1,12 +1,13 @@
 import os
 import time
 from datetime import datetime
+import logging
 
 #import logging
 #logging.basicConfig(level = logging.INFO,format = '%(asctime)s:%(levelname)s - %(message)s')
 
 import tensorflow as tf
-from tensorflow.python.platform import tf_logging as logging
+
 
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
@@ -70,7 +71,7 @@ class reporter:
         self.every_sec = every_sec
         self.start_time = time.time()
         self.last_time = time.time()
-        tf.logging.info("evaluate step:{step} path:{path} start".format(step=self.step, path=path))
+        logging.info("evaluate step:{step} path:{path} start".format(step=self.step, path=path))
 
     def update(self, top1, batches):
         self.top1 += top1
@@ -84,12 +85,12 @@ class reporter:
             self.last_time = time.time()
     
     def log(self):
-        tf.logging.info("evaluate step:{step} progress:{progress:.2f}% top1:{accury:.2f}"
+        logging.info("evaluate step:{step} progress:{progress:.2f}% top1:{accury:.2f}"
                             .format(step=self.step, progress=self.progress, accury=self.accury))
       
         
     def end(self):        
-        tf.logging.info("evaluate step:{step} finished allsamples:{samples} evalnum:{evalnum} top1:{accury:.2f} used:{used:.2f} sec"
+        logging.info("evaluate step:{step} finished allsamples:{samples} evalnum:{evalnum} top1:{accury:.2f} used:{used:.2f} sec"
                 .format(step=self.step, samples=self.samples, evalnum=self.batches, accury=self.accury, used=time.time()-self.start_time))
 
 class Evaluater:

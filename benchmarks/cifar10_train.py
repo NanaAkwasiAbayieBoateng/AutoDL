@@ -12,11 +12,11 @@ import os
 # modules
 sys.path.append('.')
 
-
+import logger
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
-import logger
+
 from param         import Configure
 from data_set      import cifar10_dataset
 from model         import official_model
