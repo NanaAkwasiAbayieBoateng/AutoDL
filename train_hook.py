@@ -101,7 +101,7 @@ class TrainStateHook(session_run_hook.SessionRunHook):
         formats_str = '''Epoch:{epoch}, step:{step}({progress:.2f}%), samples/sec:{sample:.2f}, total_loss:{total_loss:.4f}, lr:{lr}'''
         formats_str = formats_str.format(
             epoch=epoch,
-            step=step,
+            step=global_step,
             progress=progress,
             sample=sample_per_sec,
             total_loss=total_loss,
@@ -162,14 +162,14 @@ class SaverHook(tf.train.SessionRunHook):
                 self._save_mode_path,
                 global_step=step,
                 write_meta_graph=False)
-            logging.info('{0} Save checkpoint at {1}'.format(
+            logging.info('Save checkpoint at globall_step:{1}'.format(
                 datetime.now(), step))
             if self.evaluater:
                 self.evaluater.post_step(step)
             
             # keep last
             self._save_list.append(step)
-            if len(self._save_list) > self.max_to_keep:
+            if len(self._save_list) >= self.max_to_keep:
                 last = self._save_list[0]
                 self._save_list = self._save_list[1:]
                 file = "model.ckpt-%s.data-00000-of-00001" %  last
@@ -200,7 +200,7 @@ class ProfilerHook(tf.train.SessionRunHook):
     def __init__(self,
                  save_steps=None,
                  save_secs=None,
-                 output_dir="",
+                 output_dir=".",
                  show_dataflow=True,
                  show_memory=False):
         """Initializes a hook that takes periodic profiling snapshots.
@@ -218,7 +218,7 @@ class ProfilerHook(tf.train.SessionRunHook):
       show_memory: `bool`, if True, add object snapshot events to the trace
           showing the sizes and lifetimes of tensors.
     """
-        self._output_file = os.path.join(output_dir, "timeline-{}.json")
+        self._output_file = output_dir+"/timeline-{}.json"
         self._file_writer = SummaryWriterCache.get(output_dir)
         self._show_dataflow = show_dataflow
         self._show_memory = show_memory

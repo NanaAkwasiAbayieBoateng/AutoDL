@@ -55,6 +55,55 @@ class MultGPUPlacement:
 
     def _device_getter(self, currend_deviceid):
         raise NotImplementedError("Must reimplement scope")
+    
+    
+    def debug_cross_device_op(self):
+        
+        ops = tf.get_default_graph().get_operations()
+        
+        unplacentment = []
+        unkown = []
+        cpufromgpu = []
+        gpufromcpu = []
+        gpufromgpu = []    
+
+        for op in ops:
+            if len(op.device) < 1:
+                unplacentment.append(op)
+                continue
+            if 'CPU' in op.device:
+                for i in op.inputs:
+                    if 'GPU' in i.device:
+                        cpufromgpu.append((i, op))
+                continue
+
+            if 'GPU' in op.device:
+                for i in op.inputs:
+                    if 'CPU' in i.device:
+                        gpufromcpu.append((i, op))
+                    elif ('GPU' in i.device) and (op.device != i.device):
+                        gpufromgpu.append((i, op))
+                continue
+            unkown.append(op)
+        
+        with  open('debug.log', 'w') as f:
+            strs = "unkown\n" + '\n--'.join([o.name +":" +o.device for o in unkown])
+            f.write(strs)
+            strs = "\nunplacentment\n" + '\n++'.join([o.name +":" +o.device for o in unplacentment])
+            f.write(strs)
+            strs = "\ncpufromgpu\n" + '\n--'.join([i.name +":" +i.device +"->"+o.name +":"+o.device  for i,o in cpufromgpu])
+            f.write(strs)
+            strs = "\ngpufromcpu\n" + '\n++'.join([i.name +":" +i.device +"->"+o.name +":"+o.device  for i,o in gpufromcpu])
+            f.write(strs)
+            strs = "\ngpufromgpu\n" + '\n--'.join([i.name +":" +i.device +"->"+o.name +":"+o.device  for i,o in gpufromgpu])
+            f.write(strs)
+
+            
+            
+            
+                
+        
+        
 
 '''
 ReplicatePlacement:

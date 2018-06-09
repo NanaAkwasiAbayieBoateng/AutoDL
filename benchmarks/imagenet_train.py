@@ -101,10 +101,12 @@ def main(argv):
     # 2. selet a model, dataset, lr, opt, and so on,  as these can be enumeration.
     create_model_func = official_model.ImageNetModel(param.resnet_layer, param.class_num) 
     
+    '''
     evaluater = Evaluater(param, eval_dataset, 
                           modelfun = lambda image : create_model_func(image, False),
                           accuracyfun = lambda labels, predicts: accuracy(labels, predicts, 1))
-
+    '''
+    evaluater = None
 
     pipe  = multipipeline.Pipeline(param)
     global_step = tf.train.get_or_create_global_step()
@@ -135,13 +137,16 @@ def main(argv):
     train_op = pipe.setup_train(device_losses, opt)
     
     hooks = pipe.get_hook() + [
-         tf.train.StopAtStepHook(last_step = param.all_step),
-         train_hook.SaverHook(param, save_every_n_steps=100, evaluater=evaluater),
-         train_hook.TrainStateHook(param, lr, sum_loss, 
+        tf.train.StopAtStepHook(last_step = param.all_step),
+        train_hook.SaverHook(param, save_every_n_steps=10000, evaluater=evaluater),
+        train_hook.TrainStateHook(param, lr, sum_loss, 
                                     {'batch_top1': top1, 'batch_top5': top5},
-                                   every_sec = 15)     
+                                   every_sec = 15),
+        train_hook.ProfilerHook(save_steps=100, output_dir=param.checkpoint)
     ]
     
+ 
+
     
 
     config = tf.ConfigProto(
@@ -155,8 +160,10 @@ def main(argv):
     
     # start train loop 
     scaffold = InitScaffold(param)
-    with tf.train.MonitoredTrainingSession(hooks=hooks,scaffold = scaffold,
-                                           config=config) as mon_sess:
+    with tf.train.MonitoredTrainingSession(hooks=hooks,scaffold = scaffold, config=config) as mon_sess:
+        
+        pipe.vgr.debug_cross_device_op()
+                                      
         while not mon_sess.should_stop():
             mon_sess.run([train_op])
             

@@ -21,13 +21,18 @@ class PipelineHook(session_run_hook.SessionRunHook):
     '''
     prefer just the hide logic to use hook, add some debug msg
     '''
-    def __init__(self, node_coord):
+    def __init__(self, node_coord=None):
         self.init_ops = []
+        self.warm_ops = []
         self.run_ops = []
         self.fetches = {}
-        self.node_coord = node_coord
-        self.rank  = node_coord.rank()
         self.root_rank = 0
+        self.rank = 0
+
+        self.node_coord = node_coord
+        if node_coord:
+            self.rank  = node_coord.rank()
+
         ## root rank is zero
 
     def add_logtensor(self, key, tensor):
@@ -41,7 +46,9 @@ class PipelineHook(session_run_hook.SessionRunHook):
         #self.node_coord.init()
 
         ## device ? cpu
-        self.init_ops += [self.node_coord.broadcast_global_variables(self.root_rank)]
+        if self.node_coord:
+            self.init_ops += [self.node_coord.broadcast_global_variables(self.root_rank)]
+
         self.global_step = tf.train.get_global_step()
         self.run_ops += [self.global_step.assign_add(1)]
 
@@ -57,6 +64,7 @@ class PipelineHook(session_run_hook.SessionRunHook):
         '''the graph is finalized and ops can no longer be added to the graph.
         '''
         session.run(self.init_ops)
+        session.run(self.warm_ops)
         self.fetches.update({'global_step':self.global_step, 'run_ops':self.run_ops})
        
         return super().after_create_session(session, coord)
@@ -130,26 +138,37 @@ def nccl_reduce(tensors_across_devices, use_mean=True):
 
 class Pipeline:
     def __init__(self, param):
+        self.workers = param.workers
         self.gpu_nums = gpu.get_nr_gpu()
         
         ##  placement stragety 
-        #self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
-        self.vgr = var_placement.BalancePlacement(self.gpu_nums)
-        # self.vgr = var_placement.MasterPlacement(self.gpu_nums)
+        if param.placement == 'replicate':
+            self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
+        else:
+            self.vgr = var_placement.BalancePlacement(self.gpu_nums)
 
         # use Horovod as multi-node reducer
-        hvd.init()
+        self.root_rank = 0
+        if len(self.workers) > 1:
+            hvd.init()
+            self.node_reduce = hvd.allreduce
+            self.node_coord = hvd
+            self.rank = hvd.rank()   
+        else:
+            self.node_reduce = None
+            self.node_coord = None
+            self.rank = 0
+            
         
         self.cpu_reduce = copy_reduce
         self.gpu_reduce = nccl_reduce
-        self.node_reduce = hvd.allreduce
-        self.node_coord = hvd
+
         
         self.hook = PipelineHook(self.node_coord)
   
         self.gpu_devices = self.vgr.worker_devices
         self.cpu_devices = ['/device:CPU:0']
-        self.rank = hvd.rank()       
+      
 
         os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = '1'
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
@@ -180,7 +199,9 @@ class Pipeline:
                enqueue_ops.append(put_gpu_op)
                device_dataset[i] = gpu_stage.get()
         # add op to hook
-        self.hook.init_ops.append(ds_iter.initializer)
+        self.hook.init_ops += [ds_iter.initializer]
+        self.hook.warm_ops += enqueue_ops
+
         self.hook.run_ops += enqueue_ops
         return device_dataset
 
@@ -262,7 +283,8 @@ class Pipeline:
 
     def setup_train(self, device_losses, opt):
         
-        opt = self.node_coord.DistributedOptimizer(opt)
+        if self.node_coord:
+            opt = self.node_coord.DistributedOptimizer(opt)
 
         grad_map = {}
         var_map = {}

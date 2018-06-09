@@ -3,6 +3,8 @@
 --- !NameDict
 # data set 
 name: imagenet_test
+workers:
+  - 127.0.0.1
 
 # train 
 data_path: ./test_dataset/imagenet_sample/
@@ -10,13 +12,12 @@ train_nums: 1281167
 class_num: 10000
 
 #eval 
-validation_num: 50000
+validation_num: 390
 # update by cpu
-
 eval_thread_num: -1
 
 # train 
-minibatch: 2
+minibatch: 3
 epoch: 10
 
 # model config
