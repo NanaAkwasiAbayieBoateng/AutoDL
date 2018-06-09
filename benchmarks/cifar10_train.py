@@ -4,7 +4,7 @@
 # keep easy understand and simple to extend.
 # same as keras https://github.com/uber/horovod/blob/master/examples/keras_imagenet_resnet50.py 
 
-import yaml
+
 import sys
 import os
 import logging
@@ -37,11 +37,11 @@ logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers = handlers)
 # modules
 sys.path.append('.')
 
-from name_dict import NameDict
 
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
+from param         import Configure
 from data_set      import cifar10_dataset
 from model         import official_model
 from learning_rate import PiecewiseLR
@@ -97,31 +97,7 @@ TODO:
  - save checkpiont by params
 '''
 
-## TODO move single file
-def update_param(pipe):
-    train_file = './cifar10_train.yaml' if len(sys.argv) == 1 else sys.argv[1]
 
-    with open(train_file, 'r') as f:
-        param = yaml.load(f)
-    
-    #todo compute minbatch by gpumem and model 
-
-    param['all_step'] = max(int(param.epoch * param.train_nums / param.minibatch), 10)
-    param['step_per_epoch'] = max(int(param.train_nums / param.minibatch), 1)
-    param['batch_size'] = max(int(param.minibatch / pipe.gpu_nums), 1)
-    param['minibatch'] = param.batch_size*pipe.gpu_nums
-
-    #this is nessary compute lr with epoch 
-    param['train_nums'] = (param.train_nums // param.minibatch) * param.minibatch
-    
-    #update checkoint name for easy run mulitimes
-    param['checkpoint'] = "checkpoint/" + "_".join([ param.name, "batch"+str(param.minibatch), "layer"+str(param.resnet_layer)])
-    
-    if not os.path.exists(param['checkpoint']):
-        os.system("mkdir -p " + param['checkpoint'])
-
-    tf.logging.info("Param load from " + train_file)
-    return param
 
 def train_dataset(param):
     train_set, vaild_set, eval__set = cifar10_dataset(param.data_path, param.batch_size, param.epoch)
@@ -135,10 +111,12 @@ def accuracy(labels, predicts, topk):
     return tf.reduce_sum(tf.cast(tf.nn.in_top_k(predicts, labels, topk), tf.float32))
 
 def main(argv):
-
-    pipe  = multipipeline.Pipeline()
+    conf_file = './cifar10_train.yaml' if len(sys.argv) == 1 else sys.argv[1]
+   
     # 1. config load, as hypter params should define in yaml config
-    param = update_param(pipe) 
+    config = Configure(conf_file)
+    config.reconfigure()
+    param = config.param
 
     #print(tf.get_default_graph().get_operations())
     # 2. selet a model, dataset, lr, opt, and so on,  as these can be enumeration.
@@ -149,7 +127,7 @@ def main(argv):
                           accuracyfun = lambda labels, predicts: accuracy(labels, predicts, 1))
 
 
-
+    pipe  = multipipeline.Pipeline(param)
     global_step = tf.train.get_or_create_global_step()
     lr = PiecewiseLR(param)
     opt = tf.train.MomentumOptimizer(lr, param.momentum)    
@@ -185,7 +163,7 @@ def main(argv):
          train_hook.SaverHook(param, save_every_n_steps=1000, evaluater=evaluater),
          train_hook.TrainStateHook(param, lr, sum_loss, 
                                     {'batch_top1': top1, 'batch_top5': top5},
-                                   every_sec = 10)     
+                                   every_sec = 15)     
     ]
     
     

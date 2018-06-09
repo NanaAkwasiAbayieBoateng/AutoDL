@@ -21,12 +21,12 @@ class PipelineHook(session_run_hook.SessionRunHook):
     '''
     prefer just the hide logic to use hook, add some debug msg
     '''
-    def __init__(self, reducer):
+    def __init__(self, node_coord):
         self.init_ops = []
         self.run_ops = []
         self.fetches = {}
-        self.node_reduce = reducer
-        self.rank  = reducer.rank()
+        self.node_coord = node_coord
+        self.rank  = node_coord.rank()
         self.root_rank = 0
         ## root rank is zero
 
@@ -38,10 +38,10 @@ class PipelineHook(session_run_hook.SessionRunHook):
          The hook can modify the graph by adding new operations to it,
          Second call of begin() on the same graph, should not change the graph.
         '''
-        self.node_reduce.init()
+        #self.node_coord.init()
 
         ## device ? cpu
-        self.init_ops += [self.node_reduce.broadcast_global_variables(self.root_rank)]
+        self.init_ops += [self.node_coord.broadcast_global_variables(self.root_rank)]
         self.global_step = tf.train.get_global_step()
         self.run_ops += [self.global_step.assign_add(1)]
 
@@ -85,7 +85,7 @@ class PipelineHook(session_run_hook.SessionRunHook):
 
 
 ## TODO: wrapper a reducer
-def reduce_by_copy(tensors_across_devices, use_mean=True):
+def copy_reduce(tensors_across_devices, use_mean=True):
     """Does an all-reduce of a list of tensors by copying to the current device.
     The tensors are copied to the current device and then reduced.
     Args:
@@ -106,7 +106,7 @@ def reduce_by_copy(tensors_across_devices, use_mean=True):
     return reduced_tensor
 
 
-def reduce_by_nccl(tensors_across_devices, use_mean=True):
+def nccl_reduce(tensors_across_devices, use_mean=True):
     """Does an all-reduce of a list of tensors by copying to the current device.
     The tensors are copied to the current device and then reduced.
     Args:
@@ -129,36 +129,42 @@ def reduce_by_nccl(tensors_across_devices, use_mean=True):
 
 
 class Pipeline:
-    def __init__(self):
+    def __init__(self, param):
         self.gpu_nums = gpu.get_nr_gpu()
         
         ##  placement stragety 
-        # self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
-        self.vgr = var_placement.BalancePlacement(self.gpu_nums)
+        self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
+        #self.vgr = var_placement.BalancePlacement(self.gpu_nums)
         # self.vgr = var_placement.MasterPlacement(self.gpu_nums)
 
-        self.reduce = reduce_by_copy
         # use Horovod as multi-node reducer
-
         hvd.init()
-        self.node_reduce = hvd
-        self.rank = hvd.rank()
-
+        
+        self.cpu_reduce = copy_reduce
+        self.gpu_reduce = nccl_reduce
+        self.node_reduce = hvd.allreduce
+        self.node_coord = hvd
+        
+        self.hook = PipelineHook(self.node_coord)
+  
         self.gpu_devices = self.vgr.worker_devices
         self.cpu_devices = ['/device:CPU:0']
-        logging.info("pipeline self.gpu_devices:%s" % self.vgr.worker_devices)
-        self.hook = PipelineHook(self.node_reduce)
+        self.rank = hvd.rank()       
 
         os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = '1'
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
         os.environ['TF_GPU_THREAD_COUNT'] = '2'
+
+        logging.info("pipeline init done, rand:%d gpu:%s" % (self.rank, self.vgr.worker_devices))
 
 
     def get_hook(self):
         return [self.hook]
 
     def setup_dataset(self, dataset):
-
+        """
+        TODO benchmark stage, Impelement the DFS Reader
+        """
         ds_iter = dataset.make_initializable_iterator()
         image_batch, label_batch  = ds_iter.get_next()
         # use stage overhide the data from cpu to gpu copy
@@ -181,21 +187,22 @@ class Pipeline:
     def setup_model(self, device_dataset, create_model_func, isTrain=True):
         device_label = {}
         device_predict = {}
+
         for i, dev in enumerate(self.gpu_devices):
             var_scope, op_scope, device_scope = self.vgr.get_create_scope(i)
             with var_scope, op_scope, device_scope:
-                 image, label = device_dataset[i]
-                 predict = create_model_func(image, isTrain)
-            if i == 0:
-                 # as the first construct graph, all bn var is allocated.
-                 # every tower may final has some batch, so only update the first tower
-                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                image, label = device_dataset[i]
+                print(label.device)
+                assert label.device == dev
+                assert image.device == dev
+
+                predict = create_model_func(image, isTrain)            
             device_label[i] = label
             device_predict[i] = predict
 
         # add to updateop
         self.hook.init_ops += self.vgr.get_brocastop()
-        self.hook.run_ops += update_ops
+        self.hook.run_ops += self.vgr.get_update_ops()
         return device_label, device_predict
 
     def setup_loss(self, device_labels, device_predicts, compute_func, weight_decay=0.0002):
@@ -209,31 +216,26 @@ class Pipeline:
             assert 'GPU:%s'%i in predict.device
             assert labels.device == predict.device
 
-            # TODO: for large dataset remove BN var from l2 loss
-            tower_trainvars = self.vgr.get_trainable_variable(i)
-
+            #tower_trainvars = self.vgr.get_gradients_var(i)
 
             with tf.device(predict.device):
                 loss  = compute_func(labels=labels, logits=predict)
 
                 #for replicated mode every tower has same l2 loss,
                 # so this can shared
+                norm_vars = self.vgr.get_device_var(i)
 
-                l2loss = [tf.nn.l2_loss(v) for v in tower_trainvars]
-                l2loss = weight_decay * tf.add_n(l2loss)
-                total_loss = loss + l2loss
-
-
-            device_losses[i] = total_loss
-        
+                l2loss = [tf.nn.l2_loss(v) for v in norm_vars]
+                l2loss = weight_decay * tf.add_n(l2loss)            
+                device_losses[i] = loss + l2loss        
 
         #reduce gpus to cpu 
         with tf.device(self.cpu_devices[0]):
-            sum_loss = self.reduce(device_losses.values(), use_mean=False)
+            sum_loss = self.cpu_reduce(device_losses.values(), use_mean=False)
         
         # reduce between node
         if self.node_reduce and self.rank == 0:
-            sum_loss = self.node_reduce.allreduce(sum_loss,  device_dense=self.cpu_devices[0])
+            sum_loss = self.node_reduce(sum_loss,  device_dense=self.cpu_devices[0])
 
         return device_losses, sum_loss
 
@@ -252,16 +254,16 @@ class Pipeline:
                device_values[i] = compute_func(labels, predict)
 
         with tf.device(self.cpu_devices[0]):
-            value = self.reduce(device_values.values(), use_mean)
+            value = self.cpu_reduce(device_values.values(), use_mean)
         
         if self.node_reduce and self.rank == 0:
-            value = self.node_reduce.allreduce(value, device_dense=self.cpu_devices[0])
+            value = self.node_reduce(value, device_dense=self.cpu_devices[0])
         
         return value
 
     def setup_train(self, device_losses, opt):
         
-        opt = self.node_reduce.DistributedOptimizer(opt)
+        opt = self.node_coord.DistributedOptimizer(opt)
 
         grad_map = {}
         var_map = {}
@@ -269,8 +271,8 @@ class Pipeline:
         for i, loss in device_losses.items():
             with tf.device(self.gpu_devices[i]):
 
-                assert 'GPU:%s'%i in loss.device
-                tower_trainvars = self.vgr.get_trainable_variable(i)
+                assert 'GPU:%s'%i in loss.device                
+                tower_trainvars = self.vgr.get_gradients_var(i)
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
             # todo verity the grads
@@ -289,7 +291,7 @@ class Pipeline:
         device_grad = {}
         for vname, grads in grad_map.items():
             with tf.device(v.device):
-                avg_grad = self.reduce(grads)
+                avg_grad = self.gpu_reduce(grads)
 
             for v in var_map[vname]:
                 deviceid = pydev.DeviceSpec.from_string(v.device).device_index

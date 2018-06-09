@@ -133,7 +133,8 @@ def cifar10_dataset(path, batch_size, repeat=-1):
             tf.contrib.data.map_and_batch(
                 map_func=map_fun,
                 batch_size=batch_size,
-                num_parallel_batches=num_parallel_batches))
+                num_parallel_batches=num_parallel_batches,
+                drop_remainder=True))
         
         ds = ds.prefetch(batch_size)
         return ds
@@ -249,7 +250,8 @@ def imagenet_dataset(path, batch_size, repeat=-1):
               tf.contrib.data.map_and_batch(
                 map_func=map_fun,
                 batch_size=batch_size,
-                num_parallel_batches=num_parallel_batches))
+                num_parallel_batches=num_parallel_batches,
+                drop_remainder=True))
 
         ds = ds.prefetch(batch_size)
         return ds

@@ -35,12 +35,10 @@ class NameDict(dict):
             return self.ensure
         if name in self:
             return self[name]
-        return self.__getitem__(name)
-
-        # default 
-        #n = NameDict()
-        #super().__setitem__(name, n)
-        #return n
+        
+        # set a empty
+        self.__setitem__(name, '')
+        return ''
 
 
     def __setitem__(self, key, value):

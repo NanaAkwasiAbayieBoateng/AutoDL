@@ -27,7 +27,6 @@ class EvaluateRunner:
         self.handler = handler
         self.param = param
         
-        self.setup_status = 0
         self.process = Process(target=self.run, args=())
         self.process.daemon = True
         self.process.start()
@@ -49,7 +48,6 @@ class EvaluateRunner:
         as this is process the default graph will copy to this process
         '''
         self.handler.setup()
-        self.setup_status = 1
         self.event.set()
          
         while True:
@@ -63,7 +61,7 @@ class EvaluateRunner:
   
 
 class reporter:
-    def __init__(self, path, step, samples, every_sec=10):
+    def __init__(self, path, step, samples, every_sec=15):
         self.step = step
         self.samples = samples
         self.top1 = 0
@@ -91,8 +89,8 @@ class reporter:
       
         
     def end(self):        
-        tf.logging.info("evaluate step:{step} finished top1:{accury:.2f} used:{used:.2f}sec"
-                  .format(step=self.step, accury=self.accury, used=time.time()-self.start_time))
+        tf.logging.info("evaluate step:{step} finished allsamples:{samples} evalnum:{evalnum} top1:{accury:.2f} used:{used:.2f} sec"
+                .format(step=self.step, samples=self.samples, evalnum=self.batches, accury=self.accury, used=time.time()-self.start_time))
 
 class Evaluater:
     
@@ -110,10 +108,7 @@ class Evaluater:
         # start a new process, this Can't pickle lambda
         # multiprocessing.set_start_method('spawn')
         self.runner = EvaluateRunner(self, param)
-    
-    def EvaluateHook(self, every_n_steps=1000):
-        return EvaluateHook(self, every_n_steps)
-    
+        
     def setup_config(self):
         #for ROC refer: https://blog.csdn.net/jiangjieqazwsx/article/details/52262389
         os.environ['CUDA_VISIBLE_DEVICES']=''
