@@ -58,32 +58,37 @@ class MultGPUPlacement:
     
     
     def debug_cross_device_op(self):
+        def filter(op):
+            if 'save' in op.name or 'report_uninitialized' in op.name or 'Initializer' in op.name:
+                return False
+            return True
         
-        ops = tf.get_default_graph().get_operations()
+        ops =  (o for o in tf.get_default_graph().get_operations() if filter(o))
         
         unplacentment = []
         unkown = []
         cpufromgpu = []
         gpufromcpu = []
-        gpufromgpu = []    
+        gpufromgpu = []
 
         for op in ops:
             if len(op.device) < 1:
                 unplacentment.append(op)
                 continue
-            if 'CPU' in op.device:
-                for i in op.inputs:
+            if 'CPU' in op.device:                
+                for i in (o for o in op.inputs if filter(o)):
                     if 'GPU' in i.device:
                         cpufromgpu.append((i, op))
                 continue
 
             if 'GPU' in op.device:
-                for i in op.inputs:
+                for i in (o for o in op.inputs if filter(o)):
                     if 'CPU' in i.device:
                         gpufromcpu.append((i, op))
                     elif ('GPU' in i.device) and (op.device != i.device):
                         gpufromgpu.append((i, op))
                 continue
+
             unkown.append(op)
         
         with  open('debug.log', 'w') as f:

@@ -131,6 +131,9 @@ def main(argv):
 
     top1 = pipe.setup_reduce(device_labels, device_predicts, lambda x,y:accuracy(x,y, 1), use_mean=True)
     top5 = pipe.setup_reduce(device_labels, device_predicts, lambda x,y:accuracy(x,y, 5), use_mean=True)
+    
+    tf.summary.scalar('top1', top1)
+    tf.summary.scalar('top5', top5)
 
     
     #3.3 set_up gradient compute and update
@@ -142,7 +145,8 @@ def main(argv):
         train_hook.TrainStateHook(param, lr, sum_loss, 
                                     {'batch_top1': top1, 'batch_top5': top5},
                                    every_sec = 15),
-        train_hook.ProfilerHook(save_steps=100, output_dir=param.checkpoint)
+        #train_hook.ProfilerHook(save_steps=100, output_dir=param.checkpoint)
+        train_hook.SummaryHook(path=param.checkpoint)
     ]
     
  
@@ -160,7 +164,9 @@ def main(argv):
     
     # start train loop 
     scaffold = InitScaffold(param)
-    with tf.train.MonitoredTrainingSession(hooks=hooks,scaffold = scaffold, config=config) as mon_sess:
+    with tf.train.MonitoredTrainingSession(hooks=hooks,
+                                            scaffold = scaffold,
+                                            config=config) as mon_sess:
         
         pipe.vgr.debug_cross_device_op()
                                       

@@ -99,6 +99,7 @@ def cifar10_dataset(path, batch_size, repeat=-1):
         #"32,32,3  -> 3,32,32 HWC -> CHW"
         #image = tf.transpose(image, [2, 0, 1])
         #Todo show image
+        tf.summary.image("image1", image)
         return image
 
     def nomarlize(image):
@@ -237,6 +238,7 @@ def imagenet_dataset(path, batch_size):
             """ image has shape [224, 224, 3] need to transpos NCHW"""
             #if istrain:
             #    image = tf.transpose(image, [2, 0, 1]) 
+            
             return (image, label)
         
         # this is bug // can hold the input

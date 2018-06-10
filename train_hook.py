@@ -227,11 +227,11 @@ class ProfilerHook(tf.train.SessionRunHook):
 
     def begin(self):
         self._next_step = None
-        self._global_step_tensor = training_util._get_or_create_global_step_read(
-        )  # pylint: disable=protected-access
+        self._global_step_tensor = training_util._get_or_create_global_step_read()  # pylint: disable=protected-access
         if self._global_step_tensor is None:
             raise RuntimeError(
                 "Global step should be created to use ProfilerHook.")
+
 
     def before_run(self, run_context):
         self._request_summary = (self._next_step is None
@@ -268,4 +268,30 @@ class ProfilerHook(tf.train.SessionRunHook):
 
 
 
+class SummaryHook(tf.train.SessionRunHook):
+    def __init__(self, path):
+        self.save_path = path
+
+    def begin(self):
+        self.merged_ops = tf.summary.merge_all()        
+        self._global_step_tensor = training_util._get_or_create_global_step_read() 
+        
+    def start_tensorboard:
+        cmd = ""
+
+    def after_create_session(self, session, coord):  
+        self.summary_writer = tf.summary.FileWriter(self.save_path, session.graph)
+        # TODO start a new process       
+        return super().after_create_session(session, coord)
+
+    def before_run(self, run_context): 
+        fetches = {'summary': self.merged_ops, 'gloal_step': self._global_step_tensor}     
+        return basic_session_run_hooks.SessionRunArgs(fetches=fetches)
+
+    def after_run(self, run_context, run_values):
+        summary_val = run_values.results["summary"]
+        gloal_step  = run_values.results["gloal_step"]
+        self.summary_writer.add_summary(summary_val, gloal_step)
     
+    def end(self):
+        self.summary_writer.close()

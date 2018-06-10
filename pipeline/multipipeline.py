@@ -215,7 +215,7 @@ class Pipeline:
                 image, label = device_dataset[i]
                 assert label.device == dev
                 assert image.device == dev
-
+                tf.summary.image("image_%s"%i, image)
                 predict = create_model_func(image, isTrain)            
             device_label[i] = label
             device_predict[i] = predict
