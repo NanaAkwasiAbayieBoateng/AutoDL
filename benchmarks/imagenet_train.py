@@ -77,13 +77,12 @@ TODO:
 
 
 def train_dataset(param):
-    train_set, eval__set = imagenet_dataset(param.data_path, param.batch_size)
+    train_set, _ = imagenet_dataset(param.train_path, param.batch_size)
 
     return train_set
 
 def eval_dataset(param):
-    train_set, eval__set = imagenet_dataset(param.data_path, param.batch_size)
-
+    _, eval__set = imagenet_dataset(param.validation_path, param.batch_size)
     return eval__set    
     
 def accuracy(labels, predicts, topk):
@@ -101,12 +100,12 @@ def main(argv):
     # 2. selet a model, dataset, lr, opt, and so on,  as these can be enumeration.
     create_model_func = official_model.ImageNetModel(param.resnet_layer, param.class_num) 
     
-    '''
-    evaluater = Evaluater(param, eval_dataset, 
+    if param.validation_num > 0:
+        evaluater = Evaluater(param, eval_dataset, 
                           modelfun = lambda image : create_model_func(image, False),
                           accuracyfun = lambda labels, predicts: accuracy(labels, predicts, 1))
-    '''
-    evaluater = None
+    else:
+        evaluater = None
 
     pipe  = multipipeline.Pipeline(param)
     global_step = tf.train.get_or_create_global_step()

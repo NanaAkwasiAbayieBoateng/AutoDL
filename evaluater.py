@@ -98,7 +98,7 @@ class Evaluater:
     def __init__(self, param, datasetfun, modelfun, accuracyfun):
         # update thread num 
         self.param = param
-        self.thread_num = param.eval_thread_num
+        self.thread_num = param.validation_thread_num
         if self.thread_num <= 1:
             self.thread_num = max(os.cpu_count() / 4, 2)
             param.eval_thread_num = self.thread_num
@@ -106,7 +106,7 @@ class Evaluater:
         self.datasetfun = datasetfun
         self.modelfun = modelfun
         self.accuracyfun = accuracyfun
-        # start a new process, this Can't pickle lambda
+        # start a new process, this Can't pickle lambda, failed
         # multiprocessing.set_start_method('spawn')
         self.runner = EvaluateRunner(self, param)
         

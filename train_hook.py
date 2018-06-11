@@ -1,6 +1,7 @@
 import os
 import time
 import yaml
+import subprocess
 
 from datetime import datetime
 
@@ -269,6 +270,9 @@ class ProfilerHook(tf.train.SessionRunHook):
 
 
 class SummaryHook(tf.train.SessionRunHook):
+    '''
+    SummaryHook can not go with ProfilerHook
+    '''
     def __init__(self, path):
         self.save_path = path
 
@@ -276,8 +280,10 @@ class SummaryHook(tf.train.SessionRunHook):
         self.merged_ops = tf.summary.merge_all()        
         self._global_step_tensor = training_util._get_or_create_global_step_read() 
         
-    def start_tensorboard:
-        cmd = ""
+    def start_tensorboard(self):
+        cmd = "tensorboard"
+        self.process = subprocess.Popen(cmd, shell=True,cwd=self.save_path)
+
 
     def after_create_session(self, session, coord):  
         self.summary_writer = tf.summary.FileWriter(self.save_path, session.graph)
@@ -295,3 +301,5 @@ class SummaryHook(tf.train.SessionRunHook):
     
     def end(self):
         self.summary_writer.close()
+        self.process.terminate()
+        self.process.wait(3)

@@ -17,7 +17,7 @@ model_init:
 def InitScaffold(params):
     # 
     model_init = params.model_init
-    if len(model_init.pre_train_dir) == 0:
+    if not model_init.pre_train_dir or len(model_init.pre_train_dir) < 0:
         logging.info("No pre_train_dir found, use a new Scaffold")
         return tf.train.Scaffold()
     
