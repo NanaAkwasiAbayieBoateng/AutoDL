@@ -100,7 +100,7 @@ class Evaluater:
         self.param = param
         self.thread_num = param.validation_thread_num
         if self.thread_num <= 1:
-            self.thread_num = max(os.cpu_count() / 4, 2)
+            self.thread_num = max(os.cpu_count() // 4, 2)
             param.eval_thread_num = self.thread_num
         
         self.datasetfun = datasetfun
