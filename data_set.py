@@ -242,7 +242,8 @@ def imagenet_dataset(path, batch_size):
             return (image, label)
         
         # this is bug // can hold the input
-        pattern = '/'.join([p for p in pattern.split('/') if len(p) > 0])
+        pattern = pattern.replace('//','/')
+
         ds = tf.data.Dataset.list_files(pattern)
         ds = ds.apply(
             tf.contrib.data.parallel_interleave(

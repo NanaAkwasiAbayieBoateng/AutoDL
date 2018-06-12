@@ -146,6 +146,7 @@ class Pipeline:
             self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
         else:
             self.vgr = var_placement.BalancePlacement(self.gpu_nums)
+            param.placement = 'balance'
 
         # use Horovod as multi-node reducer
         self.root_rank = 0
@@ -174,7 +175,7 @@ class Pipeline:
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
         os.environ['TF_GPU_THREAD_COUNT'] = '2'
 
-        logging.info("pipeline init done, rank:%d gpu:%s" % (self.rank, self.vgr.worker_devices))
+        logging.info("pipeline init done, rank:%d gpu:%s placement:%s" % (self.rank, self.vgr.worker_devices, param.placement))
 
 
     def get_hook(self):
@@ -294,34 +295,64 @@ class Pipeline:
 
                 assert 'GPU:%s'%i in loss.device                
                 tower_trainvars = self.vgr.get_gradients_var(i)
+                
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
-            # todo verity the grads
+            #todo verity the grads
             #for grad, v in tower_grad:
             #    print("v name:%s, device:%s; g name:%s, device:%s" % (v.name, v.device, grad.name, grad.device))
 
             for grad, v in tower_grad:
-                # for replicated ingore tower name
+                # the v.name is gpu*/var_name
+                assert v.name.startswith('gpu')
+                assert 'gradients' in grad.name
+                assert 'AssignMovingAvg' not in v.name, "AssignMovingAvg no gradients  grad:%s v:%v" % (grad, v)
                 v_mode_name = '/'.join(v.name.split('/')[1:])
+
                 if grad is not None:
                     # for replicated , each tower has a v
-                    var_map.setdefault(v_mode_name, []).append(v)
-                    grad_map.setdefault(v_mode_name, []).append(grad)
+                    # for balance only a var assocate with a gpu
+                    vars=var_map.setdefault(v_mode_name, [])
+                    if v not in vars:
+                        vars.append(v)
 
-        # group to device
+                    grad_map.setdefault(v_mode_name, []).append(grad)
+                else:
+                    logging.warn("No found grad in:"+repr(v))
+
+        # for all gpus, group grads  to device
         device_grad = {}
         for vname, grads in grad_map.items():
-            with tf.device(v.device):
-                avg_grad = self.gpu_reduce(grads)
-
-            for v in var_map[vname]:
+            # var_name, var for each gpu, grad for each var
+            
+            vars = var_map[vname]
+            vars_device = set([v.device for v in vars])
+            assert len(vars_device) == len(vars), "vars_device:%s but vars:%s" % (vars_device, vars) 
+            
+            for g in grads:
+                assert 'GPU:' in g.device
+            grad_device = set([g.device for g in grads])
+            assert  len(grad_device) >= len(vars_device)
+            assert  len(grad_device) == len(grads)
+                
+            for v in vars:
+                # for master model only master reduce v
+                # for replicated model each gpu reduce v
+                with tf.device(v.device):
+                    avg_grad = self.gpu_reduce(grads)
+                 
                 deviceid = pydev.DeviceSpec.from_string(v.device).device_index
                 device_grad.setdefault(deviceid, []).append((avg_grad, v))
 
         tran_op = []
         for i, gradvars in device_grad.items():
-            v0 = gradvars[0][1]
-            with tf.device(v0.device):
-                tran_op.append(opt.apply_gradients(gradvars))
+           # check device  
+           for grad, v  in gradvars:
+               assert 'GPU:%s'%i in v.device
+               assert grad.device == v.device 
+           print(i)
+           print(gradvars)
+           with tf.device(v.device):
+               tran_op.append(opt.apply_gradients(gradvars))
 
         return tran_op

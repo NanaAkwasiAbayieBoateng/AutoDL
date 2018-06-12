@@ -1,0 +1,67 @@
+# use namedict for easy access members
+
+--- !NameDict
+
+# tran job name, all very should be sample and easy understand
+# all param used before, should be va
+name: imagenet
+workers:
+  - 127.0.0.1
+# replicate or balance
+placement: replicate
+
+# train
+class_num: 10000
+
+#data_set
+train_nums: 1281167
+train_type: tfrecord
+train_path: /data/tfrecords
+
+#test 
+test_nums: 0
+test_type: tfrecord
+test_path:
+
+#eval
+validation_num: 50000
+validation_type: tfrecord 
+validation_path: /data/tfrecords
+validation_thread_num: -1
+
+# model config
+model_init:
+  pre_train_dir: 
+  pre_train_step: -1
+
+model: resnet
+resnet_layer: 152
+
+# init_lr := initial_learning_rate*minibatch/batch_denom
+initial_learning_rate: 0.1
+batch_denom : 256
+
+# epoch
+boundaries:
+  - 30
+  - 60
+  - 80
+  - 90
+
+#lr = lr * decay_rates[i] for each boundaries[i-1], boundaries[i]
+decay_rates:
+  - 1
+  - 0.1
+  - 0.01
+  - 0.001
+  - 0.0001
+
+# l2 loss 
+weight_decay: 0.0004
+# momentum optimitor
+momentum: 0.9
+
+# train params ,
+# TODO auto configure by GPU Mem
+minibatch: 1024
+epoch: 100

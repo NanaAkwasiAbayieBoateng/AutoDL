@@ -281,7 +281,7 @@ class SummaryHook(tf.train.SessionRunHook):
         self._global_step_tensor = training_util._get_or_create_global_step_read() 
         
     def start_tensorboard(self):
-        cmd = "tensorboard"
+        cmd = "CUDA_VISIBLE_DEVICES='' tensorboard --logdir=. --port=8081"
         self.process = subprocess.Popen(cmd, shell=True,cwd=self.save_path)
 
 
