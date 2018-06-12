@@ -3,6 +3,7 @@ import os
 import tensorflow as tf
 from tensorflow.python.platform import tf_logging as logging
 
+from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_util
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
@@ -93,7 +94,9 @@ class PipelineHook(session_run_hook.SessionRunHook):
 
 
 ## TODO: wrapper a reducer
-def copy_reduce(tensors_across_devices, use_mean=True):
+## as nccl now not support reduce_sum op, in graph,
+## reduce only can use copy
+def single_reduce(tensors_across_devices, use_mean=True):
     """Does an all-reduce of a list of tensors by copying to the current device.
     The tensors are copied to the current device and then reduced.
     Args:
@@ -109,12 +112,14 @@ def copy_reduce(tensors_across_devices, use_mean=True):
         return tensors_across_devices[0]
 
     reduced_tensor = tf.add_n(tensors_across_devices)
+    #reduced_tensor = nccl.reduce_sum(tensors_across_devices)
+
     if use_mean:
         reduced_tensor *= 1.0 / len(tensors_across_devices)
     return reduced_tensor
 
 
-def nccl_reduce(tensors_across_devices, use_mean=True):
+def nccl_all_reduce(tensors_across_devices, use_mean=True):
     """Does an all-reduce of a list of tensors by copying to the current device.
     The tensors are copied to the current device and then reduced.
     Args:
@@ -129,10 +134,22 @@ def nccl_reduce(tensors_across_devices, use_mean=True):
     if len(tensors_across_devices) == 1:
         return tensors_across_devices[0]
 
-    reduced_tensor = nccl.reduce_sum(tensors_across_devices)
-    if use_mean:
-        reduced_tensor *= 1.0 / len(tensors_across_devices)
-    return reduced_tensor
+    reduced_tensor = nccl.all_sum(tensors_across_devices)
+    if not use_mean:
+        return reduced_tensor
+    
+    assert len(reduced_tensor) == len(tensors_across_devices)
+
+    results = []
+    for t, v in zip(reduced_tensor, tensors_across_devices):
+
+        assert t.device == v.device, "t:%s, v:%s should same device" %(t, v)
+        with ops.colocate_with(v):
+            reduced_tensor = t * 1.0 / len(tensors_across_devices)
+            results.append(reduced_tensor)
+        
+    return results
+
 
 
 
@@ -161,8 +178,8 @@ class Pipeline:
             self.rank = 0
             
         
-        self.cpu_reduce = copy_reduce
-        self.gpu_reduce = nccl_reduce
+        self.single_reduce = single_reduce
+        self.all_reduce = nccl_all_reduce
 
         
         self.hook = PipelineHook(self.node_coord)
@@ -252,7 +269,7 @@ class Pipeline:
 
         #reduce gpus to cpu 
         with tf.device(self.cpu_devices[0]):
-            sum_loss = self.cpu_reduce(device_losses.values(), use_mean=False)
+            sum_loss = self.single_reduce(device_losses.values(), use_mean=False)
         
         # reduce between node
         if self.node_reduce and self.rank == 0:
@@ -275,7 +292,7 @@ class Pipeline:
                device_values[i] = compute_func(labels, predict)
 
         with tf.device(self.cpu_devices[0]):
-            value = self.cpu_reduce(device_values.values(), use_mean)
+            value = self.single_reduce(device_values.values(), use_mean)
         
         if self.node_reduce and self.rank == 0:
             value = self.node_reduce(value, device_dense=self.cpu_devices[0])
@@ -322,36 +339,37 @@ class Pipeline:
 
         # for all gpus, group grads  to device
         device_grad = {}
-        for vname, grads in grad_map.items():
-            # var_name, var for each gpu, grad for each var
-            
-            vars = var_map[vname]
-            vars_device = set([v.device for v in vars])
-            assert len(vars_device) == len(vars), "vars_device:%s but vars:%s" % (vars_device, vars) 
-            
-            for g in grads:
-                assert 'GPU:' in g.device
+        for vname, raw_grads in grad_map.items():
+            # var_name, var for each gpu, grad for each var            
+            vars  = sorted(var_map[vname], key=lambda v : v.device)
+            grads = sorted(raw_grads, key=lambda v : v.device)
+
             grad_device = set([g.device for g in grads])
-            assert  len(grad_device) >= len(vars_device)
-            assert  len(grad_device) == len(grads)
-                
-            for v in vars:
-                # for master model only master reduce v
-                # for replicated model each gpu reduce v
+            assert  len(grad_device) == self.gpu_nums, "each gpu should has a grad, grads:%s" % grads
+            
+            if len(vars) == 1:
+                v = vars[0]
                 with tf.device(v.device):
                     avg_grad = self.gpu_reduce(grads)
-                 
                 deviceid = pydev.DeviceSpec.from_string(v.device).device_index
                 device_grad.setdefault(deviceid, []).append((avg_grad, v))
 
+            else:
+                assert len(vars) == self.gpu_nums, "for replicate each gpu should has a var"
+
+                all_reduce_tensors = self.all_reduce(grads)
+                for grad, v in zip(all_reduce_tensors, vars):
+                    assert grad.device == v.device, "should be same deivice grad:%s var:%s" % (grad, v)
+                    deviceid = pydev.DeviceSpec.from_string(v.device).device_index
+                    device_grad.setdefault(deviceid, []).append((avg_grad, v))                 
+                
         tran_op = []
         for i, gradvars in device_grad.items():
            # check device  
            for grad, v  in gradvars:
                assert 'GPU:%s'%i in v.device
                assert grad.device == v.device 
-           print(i)
-           print(gradvars)
+
            with tf.device(v.device):
                tran_op.append(opt.apply_gradients(gradvars))
 
