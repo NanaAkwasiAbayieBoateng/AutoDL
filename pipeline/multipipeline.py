@@ -227,14 +227,15 @@ class Pipeline:
         TODO benchmark stage, Impelement the DFS Reader
         """
         ds_iter = dataset.make_initializable_iterator()
-        image_batch, label_batch  = ds_iter.get_next()
         # use stage overhide the data from cpu to gpu copy
 
         enqueue_ops = []
         device_dataset = {}
         for i, dev in enumerate(self.gpu_devices):
-            assert "GPU:%s"%i in dev
-
+            assert "GPU:%s"%i in dev, "devices must from 0 to N"
+            # should has diff input
+            image_batch, label_batch  = ds_iter.get_next()
+           
             dtypes=[image_batch.dtype, label_batch.dtype]
             shapes=[image_batch.get_shape(), label_batch.get_shape()]
             
@@ -281,8 +282,11 @@ class Pipeline:
 
         # add to updateop
         self.hook.init_ops += self.vgr.get_brocastop()
+        
+        # update each tower
         self.hook.run_ops += self.vgr.get_update_ops()
-        logging.info("setup dataset done")
+
+        logging.info("setup model done")
         return device_label, device_predict
 
     def setup_loss(self, device_labels, device_predicts, compute_func, weight_decay=0.0002):
@@ -304,13 +308,16 @@ class Pipeline:
                 
                 loss  = compute_func(labels=labels, logits=predict)
                 
-                # for eliminate commicate, each gpu compute itself  
+                # for eliminate commicate, each gpu compute itself  and l2 loss should be same
                 norm_vars = tower_trainvars[i]
                 l2loss = [tf.nn.l2_loss(v) for v in norm_vars]
                 l2loss = weight_decay * tf.add_n(l2loss)
                 
                 train_losses.append(loss)
                 l2_losses.append(l2loss)
+
+                #self.hook.add_logtensor("train_loss_%s"%i, loss)       
+                #self.hook.add_logtensor("l2_loss_%s"%i, l2loss)       
                 
                 # each gpu compuie his loss
                 device_losses[i] = loss + l2loss        
@@ -327,7 +334,7 @@ class Pipeline:
             train_loss = self.node_reduce(train_losses,  device_dense=self.cpu_devices[0])
             l2_loss    = self.node_reduce(l2_losses,  device_dense=self.cpu_devices[0])
 
-        logging.info("setup dataset done")
+        logging.info("setup loss done")
         return device_losses, train_loss, l2_loss
 
     def setup_reduce(self, device_labels, device_predicts, compute_func, use_mean=True):
