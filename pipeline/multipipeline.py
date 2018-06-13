@@ -204,14 +204,17 @@ class Pipeline:
 
         os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = '1'
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-        os.environ['TF_GPU_THREAD_COUNT'] = '2' #str(1 + self.gpu_nums) 
+        # as cuda has single dtoH ,htod process, no use for too much threads
+        os.environ['TF_GPU_THREAD_COUNT'] = '2' 
         # see https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/index.html
         
+        #start docker --shm-size=1g --ulimit memlock=-1
         os.environ['NCCL_DEBUG']='INFO'
         os.environ['NCCL_BUFFIZE']='67108864' # 64M
         os.environ['NCCL_NTHREADS']='256'     # only be 64, 128 or 256. Ignoring     
-        os.environ['NCCL_MAX_NRINGS']='4'     # 4 nvlink
-        
+        #os.environ['NCCL_MAX_NRINGS']='4'     # 4 nvlink for each gpu
+        os.environ['NCCL_SINGLE_RING_THRESHOLD']='4096' #4K 
+
         # Default to two threads. One for device compute and another for memory copies.
         logging.info("pipeline init done, rank:%d gpu:%s placement:%s" % (self.rank, self.vgr.worker_devices, param.placement))
 
@@ -292,21 +295,21 @@ class Pipeline:
             assert 'GPU:%s'%i in predict.device
             assert labels.device == predict.device
 
-            #tower_trainvars = self.vgr.get_gradients_var(i)
+            tower_trainvars = self.vgr.get_device_varmap()
 
             with tf.device(predict.device), tf.name_scope('loss_stage_%d' %i) as op_scope:
+                
                 loss  = compute_func(labels=labels, logits=predict)
-
-                #for replicated mode every tower has same l2 loss,
-                # so this can shared
-                norm_vars = self.vgr.get_device_var(i)
-
+                
+                # for eliminate commicate, each gpu compute itself  
+                norm_vars = tower_trainvars[i]
                 l2loss = [tf.nn.l2_loss(v) for v in norm_vars]
                 l2loss = weight_decay * tf.add_n(l2loss)
                 
                 train_losses.append(loss)
                 l2_losses.append(l2loss)
-     
+                
+                # each gpu compuie his loss
                 device_losses[i] = loss + l2loss        
 
         #reduce gpus to cpu 
@@ -354,11 +357,13 @@ class Pipeline:
         var_map = {}
         #compute and group by var name, we ingore the first tower name
         for i, loss in device_losses.items():
+            
+            gradients_varmap = self.get_gradients_varmap()
+
             with tf.device(self.gpu_devices[i]), tf.name_scope('compute_gradients_stage_%d' %i) as op_scope:
 
                 assert 'GPU:%s'%i in loss.device                
-                tower_trainvars = self.vgr.get_gradients_var(i)
-                
+                tower_trainvars = gradients_varmap[i]                
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
             #todo verity the grads

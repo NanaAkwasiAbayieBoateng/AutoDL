@@ -234,7 +234,7 @@ def main(argv):
                                             scaffold = scaffold,
                                             config=config) as mon_sess:
         
-        pipe.vgr.debug_cross_device_op()
+        #pipe.vgr.debug_cross_device_op()
                                       
         while not mon_sess.should_stop():
             mon_sess.run([train_op])
