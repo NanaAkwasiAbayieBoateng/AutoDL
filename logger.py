@@ -35,7 +35,7 @@ class FileTraceHandker(logging.StreamHandler):
         
 #FORMAT = '%(asctime)-15s %(name)s %(process)d %(levelname)s %(message)s'
 FORMAT = '%(asctime)-15s %(process)d %(levelname)s %(message)s'
-logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers = [StreamTraceHandker()])
+logging.basicConfig(format=FORMAT, level=logging.INFO, handlers = [StreamTraceHandker()])
 
 
 def getLogger(name, path):

@@ -64,7 +64,9 @@ class PipelineHook(session_run_hook.SessionRunHook):
     def after_create_session(self, session, coord):
         '''the graph is finalized and ops can no longer be added to the graph.
         '''
+        logging.info("run init_ops")
         session.run(self.init_ops)
+        logging.info("run warn_ops")
         session.run(self.warm_ops)
         self.fetches.update({'global_step':self.global_step, 'run_ops':self.run_ops})
        
@@ -91,7 +93,15 @@ class PipelineHook(session_run_hook.SessionRunHook):
                 continue
 
             print('%s:%s' %(k, run_values.results[k]))
+'''
+the GPU topo affect reduce algthrithm
 
+topo get:
+   nvidia-smi nvlink -s -p -i 0
+name get:
+   lspci -nn |grep NVIDIA
+
+'''
 
 ## TODO: wrapper a reducer
 ## as nccl now not support reduce_sum op, in graph,
@@ -110,6 +120,8 @@ def single_reduce(tensors_across_devices, use_mean=True):
 
     if len(tensors_across_devices) == 1:
         return tensors_across_devices[0]
+    #as not each GPU has P2P over NVLINK, so this willbe be bottleneck
+    #TODO use tensorflow/contrib/all_reduce/python/all_reduce.py
 
     reduced_tensor = tf.add_n(tensors_across_devices)
     #reduced_tensor = nccl.reduce_sum(tensors_across_devices)
@@ -117,6 +129,7 @@ def single_reduce(tensors_across_devices, use_mean=True):
     if use_mean:
         reduced_tensor *= 1.0 / len(tensors_across_devices)
     return reduced_tensor
+
 
 
 def nccl_all_reduce(tensors_across_devices, use_mean=True):
@@ -179,6 +192,7 @@ class Pipeline:
             
         
         self.single_reduce = single_reduce
+        #TODO use xring allreduce ?
         self.all_reduce = nccl_all_reduce
 
         
@@ -190,8 +204,15 @@ class Pipeline:
 
         os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = '1'
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-        os.environ['TF_GPU_THREAD_COUNT'] = '2'
-
+        os.environ['TF_GPU_THREAD_COUNT'] = '2' #str(1 + self.gpu_nums) 
+        # see https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/index.html
+        
+        os.environ['NCCL_DEBUG']='INFO'
+        os.environ['NCCL_BUFFIZE']='67108864' # 64M
+        os.environ['NCCL_NTHREADS']='256'     # only be 64, 128 or 256. Ignoring     
+        os.environ['NCCL_MAX_NRINGS']='4'     # 4 nvlink
+        
+        # Default to two threads. One for device compute and another for memory copies.
         logging.info("pipeline init done, rank:%d gpu:%s placement:%s" % (self.rank, self.vgr.worker_devices, param.placement))
 
 
@@ -205,17 +226,31 @@ class Pipeline:
         ds_iter = dataset.make_initializable_iterator()
         image_batch, label_batch  = ds_iter.get_next()
         # use stage overhide the data from cpu to gpu copy
+
         enqueue_ops = []
         device_dataset = {}
         for i, dev in enumerate(self.gpu_devices):
-           with tf.device(dev), tf.name_scope('gpustage_%d' %i) as op_scope:
-               gpu_stage = tf.contrib.staging.StagingArea(
-                                dtypes=[image_batch.dtype, label_batch.dtype],
-                                shapes=[image_batch.get_shape(),label_batch.get_shape()])
+            assert "GPU:%s"%i in dev
 
-               put_gpu_op = gpu_stage.put([image_batch, label_batch])
-               enqueue_ops.append(put_gpu_op)
-               device_dataset[i] = gpu_stage.get()
+            dtypes=[image_batch.dtype, label_batch.dtype]
+            shapes=[image_batch.get_shape(), label_batch.get_shape()]
+            
+            # cpu stage
+            with tf.device(self.cpu_devices[0]), tf.name_scope('cpustage_%d' %i) as op_scope:
+
+                gpu_copy_stage = tf.contrib.staging.StagingArea(dtypes=dtypes, shapes=shapes)
+                gpu_copy_stage_op = gpu_copy_stage.put([image_batch, label_batch])
+                copy_stage_outputs = gpu_copy_stage.get()
+            
+            # gpu stage
+            with tf.device(dev), tf.name_scope('gpustage_%d' %i) as op_scope:
+                gpu_compute_stage = tf.contrib.staging.StagingArea(dtypes=dtypes, shapes=shapes)
+                gpu_compute_stage_op = gpu_compute_stage.put(copy_stage_outputs)
+                compute_stage_outputs = gpu_compute_stage.get()
+               
+            enqueue_ops += [gpu_copy_stage_op, gpu_compute_stage_op]
+            device_dataset[i] = compute_stage_outputs
+
         # add op to hook
         self.hook.init_ops += [ds_iter.initializer]
         self.hook.warm_ops += enqueue_ops
@@ -233,7 +268,8 @@ class Pipeline:
                 image, label = device_dataset[i]
                 assert label.device == dev
                 assert image.device == dev
-                tf.summary.image("image_%s"%i, image)
+                
+                #tf.summary.image("image_%s"%i, image)
                 predict = create_model_func(image, isTrain)            
             device_label[i] = label
             device_predict[i] = predict
@@ -248,6 +284,8 @@ class Pipeline:
         default we add l2 loss
         '''
         device_losses = {}
+        train_losses = []
+        l2_losses = []
         for i, predict in device_predicts.items():
 
             labels = device_labels[i]
@@ -256,7 +294,7 @@ class Pipeline:
 
             #tower_trainvars = self.vgr.get_gradients_var(i)
 
-            with tf.device(predict.device):
+            with tf.device(predict.device), tf.name_scope('loss_stage_%d' %i) as op_scope:
                 loss  = compute_func(labels=labels, logits=predict)
 
                 #for replicated mode every tower has same l2 loss,
@@ -264,18 +302,26 @@ class Pipeline:
                 norm_vars = self.vgr.get_device_var(i)
 
                 l2loss = [tf.nn.l2_loss(v) for v in norm_vars]
-                l2loss = weight_decay * tf.add_n(l2loss)            
+                l2loss = weight_decay * tf.add_n(l2loss)
+                
+                train_losses.append(loss)
+                l2_losses.append(l2loss)
+     
                 device_losses[i] = loss + l2loss        
 
         #reduce gpus to cpu 
         with tf.device(self.cpu_devices[0]):
-            sum_loss = self.single_reduce(device_losses.values(), use_mean=False)
+            sum_loss   = self.single_reduce(device_losses.values(), use_mean=False)
+            train_loss = self.single_reduce(train_losses, use_mean=False)
+            l2_loss   = self.single_reduce(l2_losses, use_mean=False)
         
         # reduce between node
         if self.node_reduce and self.rank == 0:
-            sum_loss = self.node_reduce(sum_loss,  device_dense=self.cpu_devices[0])
+            sum_loss   = self.node_reduce(sum_loss,  device_dense=self.cpu_devices[0])
+            train_loss = self.node_reduce(train_losses,  device_dense=self.cpu_devices[0])
+            l2_loss    = self.node_reduce(l2_losses,  device_dense=self.cpu_devices[0])
 
-        return device_losses, sum_loss
+        return device_losses, train_loss, l2_loss
 
     def setup_reduce(self, device_labels, device_predicts, compute_func, use_mean=True):
         '''
@@ -288,7 +334,7 @@ class Pipeline:
             assert 'GPU:%s'%i in predict.device
             assert labels.device == predict.device
 
-            with tf.device(self.gpu_devices[i]):
+            with tf.device(self.gpu_devices[i]), tf.name_scope('reduce_stage_%d' %i) as op_scope:
                device_values[i] = compute_func(labels, predict)
 
         with tf.device(self.cpu_devices[0]):
@@ -308,7 +354,7 @@ class Pipeline:
         var_map = {}
         #compute and group by var name, we ingore the first tower name
         for i, loss in device_losses.items():
-            with tf.device(self.gpu_devices[i]):
+            with tf.device(self.gpu_devices[i]), tf.name_scope('compute_gradients_stage_%d' %i) as op_scope:
 
                 assert 'GPU:%s'%i in loss.device                
                 tower_trainvars = self.vgr.get_gradients_var(i)
@@ -350,7 +396,7 @@ class Pipeline:
             if len(vars) == 1:
                 v = vars[0]
                 with tf.device(v.device):
-                    avg_grad = self.gpu_reduce(grads)
+                    avg_grad = self.single_reduce(grads)
                 deviceid = pydev.DeviceSpec.from_string(v.device).device_index
                 device_grad.setdefault(deviceid, []).append((avg_grad, v))
 
@@ -358,12 +404,14 @@ class Pipeline:
                 assert len(vars) == self.gpu_nums, "for replicate each gpu should has a var"
 
                 all_reduce_tensors = self.all_reduce(grads)
-                for grad, v in zip(all_reduce_tensors, vars):
-                    assert grad.device == v.device, "should be same deivice grad:%s var:%s" % (grad, v)
+                for avg_grad, v in zip(all_reduce_tensors, vars):
+                    assert avg_grad.device == v.device, "should be same deivice grad:%s var:%s" % (avg_grad, v)
                     deviceid = pydev.DeviceSpec.from_string(v.device).device_index
                     device_grad.setdefault(deviceid, []).append((avg_grad, v))                 
                 
         tran_op = []
+        assert len(device_grad.items()) == self.gpu_nums, "each gpu should update gradients"
+
         for i, gradvars in device_grad.items():
            # check device  
            for grad, v  in gradvars:

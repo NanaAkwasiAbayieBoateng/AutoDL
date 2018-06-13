@@ -9,6 +9,8 @@ workers:
   - 127.0.0.1
 # replicate or balance
 placement: replicate
+#placement: balance
+checkpoint: /data/
 
 # train
 class_num: 10000
@@ -24,6 +26,7 @@ test_type: tfrecord
 test_path:
 
 #eval
+validation_enable: 0
 validation_num: 50000
 validation_type: tfrecord 
 validation_path: /data/tfrecords

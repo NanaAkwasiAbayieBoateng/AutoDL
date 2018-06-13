@@ -32,10 +32,10 @@ class Configure:
         param.train_nums = (param.train_nums // param.minibatch) * param.minibatch
     
         #update checkoint name for easy run mulitimes
-        param.checkpoint = "checkpoint/" + "_".join([ param.name, "batch"+str(param.minibatch), "layer"+str(param.resnet_layer)])
+        param.checkpoint = param.checkpoint + "/" + "_".join([ param.name, "batch"+str(param.minibatch), "layer"+str(param.resnet_layer)])
     
-        if not os.path.exists(param['checkpoint']):
-             os.system("mkdir -p " + param['checkpoint'])
+        if not os.path.exists(param.checkpoint):
+             os.system("mkdir -p " + param.checkpoint)
         
         logging.info("reconfigure:"+repr(self.param))
 

@@ -30,14 +30,15 @@ class TrainStateHook(session_run_hook.SessionRunHook):
     Loger train state
     '''
 
-    def __init__(self, param, lr, total_loss, metrics, every_sec=3):
+    def __init__(self, param, lr, train_loss, l2_loss, metrics, every_sec=3):
 
         self.minbatch = param.minibatch
         self.step_per_epoch = param.step_per_epoch
         self.all_step  = param.all_step
         self.worker_num = gpu.get_nr_gpu()
         self.lr = lr
-        self.total_loss = total_loss
+        self.train_loss = train_loss
+        self.l2_loss = l2_loss
         self.every_sec = every_sec
         self.fetches = metrics
         self._start_steps = None
@@ -47,7 +48,8 @@ class TrainStateHook(session_run_hook.SessionRunHook):
 
         self.fetches['self_global_step'] = self.global_step
         self.fetches['self_lr'] = self.lr
-        self.fetches['self_total_loss'] = self.total_loss
+        self.fetches['self_train_loss'] = self.train_loss
+        self.fetches['self_l2_loss'] = self.l2_loss
 
     def end(self, session):
         '''when session.run() raises OutOfRangeError or StopIteration.
@@ -96,16 +98,18 @@ class TrainStateHook(session_run_hook.SessionRunHook):
         step  = global_step % self.step_per_epoch
 
         lr = results['self_lr']
-        total_loss = results['self_total_loss']
+        train_loss = results['self_train_loss']
+        l2_loss = results['self_l2_loss']
         progress = 100.0 * step / self.step_per_epoch
 
-        formats_str = '''Epoch:{epoch}, step:{step}({progress:.2f}%), samples/sec:{sample:.2f}, total_loss:{total_loss:.4f}, lr:{lr}'''
+        formats_str = '''Epoch:{epoch}, step:{step}({progress:.2f}%), samples/sec:{sample:.2f}, train_loss:{train_loss:.5f}, l2_loss:{l2_loss:.5f} lr:{lr}'''
         formats_str = formats_str.format(
             epoch=epoch,
             step=global_step,
             progress=progress,
             sample=sample_per_sec,
-            total_loss=total_loss,
+            train_loss=train_loss,
+            l2_loss=l2_loss,
             lr=lr)
         
         metrics = [
@@ -282,7 +286,8 @@ class SummaryHook(tf.train.SessionRunHook):
         
     def start_tensorboard(self):
         cmd = "CUDA_VISIBLE_DEVICES='' tensorboard --logdir=. --port=8081"
-        self.process = subprocess.Popen(cmd, shell=True,cwd=self.save_path)
+        logging.info("pleas start tensorbord by "+ cmd)
+        #self.process = subprocess.Popen(cmd, shell=True,cwd=self.save_path)
 
 
     def after_create_session(self, session, coord):  
@@ -301,5 +306,5 @@ class SummaryHook(tf.train.SessionRunHook):
     
     def end(self):
         self.summary_writer.close()
-        self.process.terminate()
-        self.process.wait(3)
+        #self.process.terminate()
+        #self.process.wait(3)
