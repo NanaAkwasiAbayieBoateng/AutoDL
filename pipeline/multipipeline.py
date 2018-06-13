@@ -259,6 +259,8 @@ class Pipeline:
         self.hook.warm_ops += enqueue_ops
 
         self.hook.run_ops += enqueue_ops
+        
+        logging.info("setup dataset done")
         return device_dataset
 
     def setup_model(self, device_dataset, create_model_func, isTrain=True):
@@ -280,6 +282,7 @@ class Pipeline:
         # add to updateop
         self.hook.init_ops += self.vgr.get_brocastop()
         self.hook.run_ops += self.vgr.get_update_ops()
+        logging.info("setup dataset done")
         return device_label, device_predict
 
     def setup_loss(self, device_labels, device_predicts, compute_func, weight_decay=0.0002):
@@ -289,13 +292,13 @@ class Pipeline:
         device_losses = {}
         train_losses = []
         l2_losses = []
+        
+        tower_trainvars = self.vgr.get_device_varmap()
         for i, predict in device_predicts.items():
 
             labels = device_labels[i]
             assert 'GPU:%s'%i in predict.device
             assert labels.device == predict.device
-
-            tower_trainvars = self.vgr.get_device_varmap()
 
             with tf.device(predict.device), tf.name_scope('loss_stage_%d' %i) as op_scope:
                 
@@ -314,9 +317,9 @@ class Pipeline:
 
         #reduce gpus to cpu 
         with tf.device(self.cpu_devices[0]):
-            sum_loss   = self.single_reduce(device_losses.values(), use_mean=False)
-            train_loss = self.single_reduce(train_losses, use_mean=False)
-            l2_loss   = self.single_reduce(l2_losses, use_mean=False)
+            sum_loss   = self.single_reduce(device_losses.values(), use_mean=True)
+            train_loss = self.single_reduce(train_losses, use_mean=True)
+            l2_loss    = self.single_reduce(l2_losses, use_mean=True)
         
         # reduce between node
         if self.node_reduce and self.rank == 0:
@@ -324,6 +327,7 @@ class Pipeline:
             train_loss = self.node_reduce(train_losses,  device_dense=self.cpu_devices[0])
             l2_loss    = self.node_reduce(l2_losses,  device_dense=self.cpu_devices[0])
 
+        logging.info("setup dataset done")
         return device_losses, train_loss, l2_loss
 
     def setup_reduce(self, device_labels, device_predicts, compute_func, use_mean=True):
@@ -355,11 +359,12 @@ class Pipeline:
 
         grad_map = {}
         var_map = {}
+
         #compute and group by var name, we ingore the first tower name
+        gradients_varmap = self.vgr.get_gradients_varmap()
+
         for i, loss in device_losses.items():
             
-            gradients_varmap = self.get_gradients_varmap()
-
             with tf.device(self.gpu_devices[i]), tf.name_scope('compute_gradients_stage_%d' %i) as op_scope:
 
                 assert 'GPU:%s'%i in loss.device                
@@ -426,4 +431,5 @@ class Pipeline:
            with tf.device(v.device):
                tran_op.append(opt.apply_gradients(gradvars))
 
+        logging.info("setup train done")
         return tran_op

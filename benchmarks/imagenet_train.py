@@ -154,7 +154,6 @@ def main(argv):
 
     #3.2 set_up model and loss    
     device_labels, device_predicts = pipe.setup_model(device_dataset, create_model_func)
-    logging.info("set up model done") 
     
     def compute_loss_func(labels, logits):
         loss = tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=labels)
@@ -173,7 +172,6 @@ def main(argv):
     #3.3 set_up gradient compute and update
     train_op = pipe.setup_train(device_losses, opt)
     
-    logging.info("set up train done") 
     hooks = pipe.get_hook() + [
         tf.train.StopAtStepHook(last_step = param.all_step),
         train_hook.SaverHook(param, save_every_n_steps=10000, evaluater=evaluater),

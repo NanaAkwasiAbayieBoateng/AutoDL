@@ -35,7 +35,7 @@ class MultGPUPlacement:
     def get_gradients_varmap(self):
         raise NotImplementedError("Must reimplement scope")
         """return the deviceid need to compute, return map to cache multi get """
-     def get_device_varmap(self, deviceid):
+    def get_device_varmap(self):
         raise NotImplementedError("Must reimplement scope")
     
     def get_update_ops(self):
@@ -153,9 +153,8 @@ class ReplicatePlacement(MultGPUPlacement):
             gradients_varmap.setdefault(spec.device_index, []).append(v)
         return gradients_varmap            
 
-    def get_device_varmap(self, deviceid):      
+    def get_device_varmap(self):      
         """used to compute the normal, only gradients need to compute l2 loss"""
-        
         gradients_varmap = {}
         for v in tf.trainable_variables():
             spec = pydev.DeviceSpec.from_string(v.device)
@@ -253,13 +252,13 @@ class BalancePlacement(MultGPUPlacement):
     def get_gradients_varmap(self):        
         """return the deviceid need to compute gradients, for replciate each tower only compute its var """
         vars = tf.trainable_variables()
-        gradients_varmap = {i:var for i in range(self.gpu_nums):}
+        gradients_varmap = {i: vars for i in range(0, self.gpu_nums)}
         return gradients_varmap            
 
-    def get_device_varmap(self, deviceid):      
+    def get_device_varmap(self):      
         """used to compute the normal,  every gradient variable  need to compute l2 loss"""        
         vars = tf.trainable_variables()
-        gradients_varmap = {i:var for i in range(self.gpu_nums):}
+        gradients_varmap = {i: vars for i in range(0, self.gpu_nums)}
         return gradients_varmap  
 
     def get_brocastop(self):
