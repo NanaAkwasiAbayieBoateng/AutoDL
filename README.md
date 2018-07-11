@@ -1,6 +1,9 @@
-### AutoML(0.1)
+### AutoML(0.2)
 - A tf train framework for auto train the nice mode.
 - This project now is developing, now as code showing
+
+### performance
+- ON single 8-V100, 936 per sec at imagenet batch 1024
 
 ### Feature
 - sample API & module: keep sample & keep easy to replace.
@@ -8,11 +11,15 @@
   - replcated for P2P with GPU such as NVLINK
   - BlacePlament for low latency and limit bandwith such as PCI-E*16 
 
-
+### TODO cuda mem_setop
+- 
+- 
 
 ### **TODO**:
   1. **distribute support**: horovd(MPI) and broadcast_proxy.
      - horovd (MPI & Roce)
+       - each a singe process 
+
      - broadcast_proxy： seastear, DPDK
   2. **Auto hyterparam select**: detect the cpu, gpu, network limits, as much use evey resource
      - detect system configure
@@ -22,58 +29,3 @@
 
 ###　Benchmark
   - DGX workstation: V100*4, NVLink 100GB, 1100 sample/sec for imagenet resnet50 batchsize:128
-
-
-### build
-
-```
-# update seastear
-git submodule update --init --recursive
-
-# for apt update key errors:
-$ apt-get update && apt-get install -y apt-transport-https
-$ echo 'deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64 /' > /etc/apt/sources.list.d/cuda.list
-$ apt-get update
-
-```
-
-### grad variable sync strategy
-- multi machine
-   - allreduce(RDMA + MPI) > RDMA + grpc > parameter server
-- multi GPU
-   - For GPU can P2P communication use replicated at GPU
-   - For GPU connect to different cpu or differnet PCI-E switch use relicated at CPU
-- split variabley
-   - if max size too large split it to slice (some like model parallel)
-
-### pipeline and streaming 
-- keep buffer with pipeline to keep every step max concurrency
-```
-   Data -> [stageArea]-> GPU0
-                      -> GPU1 -> grad -> synchronization -> avg -> apply       |
-                              -> back Propagation                        |-> forward 
-```
-
-
-
-### impelement API
- 1. replicated as GPU
-   - keras parameter store cpu,  multi-gpu apply each mode
- 2. add model zoo
-
-
-### profile tips
-- config.inter_op_parallelism_threads : set to cpu core num
-- 
-
-### devices profile
- - Storage device:
-      - SATA3.0: 6GB/s bandwith
-      - M.2 (socket2->pcie2 or sata:500MB/s, socket3: pcie3 * 4: 32Gb/s)
-      - NVMe(Non volatile Memory Express) pci-e
-          - IOPS: 4k > 3WIOPS
-          - bandwith: 4K*64thread > 1GB/s ;
-          - access lantency: 0.02 ms
-          
-  - ZMQ: maybe a good choice for multi machine    
-

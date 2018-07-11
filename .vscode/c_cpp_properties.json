@@ -14,7 +14,7 @@
                 "/usr/local/cuda-9.0/targets/x86_64-linux/include",
                 "/usr/local/lib/python3.5/dist-packages/tensorflow/include",
                 "/home/tanguofu/workspace/AutoDL/shouter/shouter",
-                "/home/tanguofu/workspace/tensorflow/tensorflow"                
+                "/home/tanguofu/workspace/tensorflow/"                
             ],
             "defines": ["-D_GLIBCXX_USE_CXX11_ABI=0"],
             "compilerPath": "/usr/bin/gcc-7",

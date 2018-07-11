@@ -171,7 +171,7 @@ class Pipeline:
         self.workers = param.workers
         self.gpu_nums = gpu.get_nr_gpu()
         
-        ##  placement stragety 
+        ##  placement stragety, allreduce + nccl + rmda
         if param.placement == 'replicate':
             self.vgr = var_placement.ReplicatePlacement(self.gpu_nums)
         else:
@@ -330,15 +330,15 @@ class Pipeline:
         
         # reduce between node
         if self.node_reduce and self.rank == 0:
-            sum_loss   = self.node_reduce(sum_loss,  device_dense=self.cpu_devices[0])
-            train_loss = self.node_reduce(train_losses,  device_dense=self.cpu_devices[0])
-            l2_loss    = self.node_reduce(l2_losses,  device_dense=self.cpu_devices[0])
+            sum_loss   = self.node_reduce(sum_loss, average=True, device_dense=self.cpu_devices[0])
+            train_loss = self.node_reduce(train_losses, average=True, device_dense=self.cpu_devices[0])
+            l2_loss    = self.node_reduce(l2_losses, average=True, device_dense=self.cpu_devices[0])
 
         logging.info("setup loss done")
         return device_losses, train_loss, l2_loss
 
     def setup_reduce(self, device_labels, device_predicts, compute_func, use_mean=True):
-        '''
+        '''use_mean
         default we add l2 loss
         '''
         device_values = {}
@@ -355,7 +355,7 @@ class Pipeline:
             value = self.single_reduce(device_values.values(), use_mean)
         
         if self.node_reduce and self.rank == 0:
-            value = self.node_reduce(value, device_dense=self.cpu_devices[0])
+            value = self.node_reduce(value, average=use_mean, device_dense=self.cpu_devices[0])
         
         return value
 
@@ -365,8 +365,7 @@ class Pipeline:
             opt = self.node_coord.DistributedOptimizer(opt)
 
         grad_map = {}
-        var_map = {}
-
+        var_map  = {}
         #compute and group by var name, we ingore the first tower name
         gradients_varmap = self.vgr.get_gradients_varmap()
 
@@ -378,29 +377,25 @@ class Pipeline:
                 tower_trainvars = gradients_varmap[i]                
                 tower_grad = opt.compute_gradients(loss=loss, var_list=tower_trainvars)
             
-            #todo verity the grads
-            #for grad, v in tower_grad:
-            #    print("v name:%s, device:%s; g name:%s, device:%s" % (v.name, v.device, grad.name, grad.device))
-
             for grad, v in tower_grad:
                 # the v.name is gpu*/var_name
                 assert v.name.startswith('gpu')
                 assert 'gradients' in grad.name
-                assert 'AssignMovingAvg' not in v.name, "AssignMovingAvg no gradients  grad:%s v:%v" % (grad, v)
+                assert grad.device == v.device
+
                 v_mode_name = '/'.join(v.name.split('/')[1:])
 
                 if grad is not None:
                     # for replicated , each tower has a v
                     # for balance only a var assocate with a gpu
-                    vars=var_map.setdefault(v_mode_name, [])
-                    if v not in vars:
-                        vars.append(v)
-
+                    var_map.setdefault(v_mode_name, []).append(v)
                     grad_map.setdefault(v_mode_name, []).append(grad)
                 else:
-                    logging.warn("No found grad in:"+repr(v))
-
-        # for all gpus, group grads  to device
+                    logging.warn("No found grad for var:"+repr(v))
+        
+        assert len(grad_map) == len(var_map), "the vars num should be same"
+        
+        # for all gpus, group grads to device
         device_grad = {}
         for vname, raw_grads in grad_map.items():
             # var_name, var for each gpu, grad for each var            
@@ -412,6 +407,7 @@ class Pipeline:
             
             if len(vars) == 1:
                 v = vars[0]
+                #var only placement at one gpu 
                 with tf.device(v.device):
                     avg_grad = self.single_reduce(grads)
                 deviceid = pydev.DeviceSpec.from_string(v.device).device_index
@@ -421,8 +417,10 @@ class Pipeline:
                 assert len(vars) == self.gpu_nums, "for replicate each gpu should has a var"
 
                 all_reduce_tensors = self.all_reduce(grads)
+                assert len(vars) == len(all_reduce_tensors), "reduce should has same nums"
+
                 for avg_grad, v in zip(all_reduce_tensors, vars):
-                    assert avg_grad.device == v.device, "should be same deivice grad:%s var:%s" % (avg_grad, v)
+                    assert avg_grad.device == v.device, "should be same device grad:%s var:%s" % (avg_grad, v)
                     deviceid = pydev.DeviceSpec.from_string(v.device).device_index
                     device_grad.setdefault(deviceid, []).append((avg_grad, v))                 
                 
@@ -435,7 +433,7 @@ class Pipeline:
                assert 'GPU:%s'%i in v.device
                assert grad.device == v.device 
 
-           with tf.device(v.device):
+           with tf.device(v.device),  tf.name_scope('apply_gradients_stage_%d'%i) as op_scope:
                tran_op.append(opt.apply_gradients(gradvars))
 
         logging.info("setup train done")

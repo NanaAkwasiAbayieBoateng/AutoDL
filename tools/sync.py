@@ -44,6 +44,14 @@ def sync(files, dest_dir, dest_host, dest_port='36000', dest_user='root'):
            print("copy failed")
            sys.exit(-1)
 
+
+def setup_login():
+    '''
+    see http://www.linuxproblem.org/art_9.html
+    '''
+    #TODO
+    pass
+    
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         print('usage: %s ip [port] [destdir]' % sys.argv[0])
